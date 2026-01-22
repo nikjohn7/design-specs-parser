@@ -241,22 +241,32 @@ class TestGetScheduleNameWithWorkbook:
         # Should find the PROJECT title first
         assert 'PROJECT' in result or 'Interior Schedule' in result
 
-    def test_formula_reference_to_cover_sheet(self):
-        """Test handling of formula reference to Cover Sheet."""
+    @pytest.mark.parametrize(
+        "formula",
+        [
+            "='[1]Cover Sheet'!A6",
+            "='[1]Cover Sheet'!$A$6",
+            "='Cover Sheet'!$A$6",
+            "='Cover Sheet'!$A6",
+            "='Cover Sheet'!A$6",
+        ],
+    )
+    def test_formula_reference_to_cover_sheet(self, formula: str):
+        """Test handling of formula reference to Cover Sheet (incl. absolute refs)."""
         wb = Workbook()
-        
+
         # Create Cover Sheet with title
         cover = wb.active
         cover.title = 'Cover Sheet'
         cover['A6'] = 'SCHEDULE 003- INTERNAL FINISHES'
-        
+
         # Create Schedule sheet with formula reference
         schedule = wb.create_sheet('Schedule')
-        schedule['A7'] = "='[1]Cover Sheet'!A6"
-        
+        schedule['A7'] = formula
+
         # Make Schedule the active sheet
         wb.active = schedule
-        
+
         result = get_schedule_name(wb, 'test.xlsx')
         # Should resolve the formula and get the title from Cover Sheet
         assert result == 'SCHEDULE 003- INTERNAL FINISHES'

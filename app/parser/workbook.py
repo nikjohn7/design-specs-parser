@@ -174,13 +174,13 @@ METADATA_LABELS = frozenset({
 
 # Pattern to detect formula references (e.g., ='[1]Cover Sheet'!A6)
 FORMULA_PATTERN = re.compile(
-    r"^=\s*'?\[?\d*\]?([^'!]+)'?!([A-Z]+)(\d+)$",
+    r"^=\s*'?\[?\d*\]?([^'!]+)'?!\$?([A-Z]+)\$?(\d+)$",
     re.IGNORECASE
 )
 
 # Pattern to detect Cover Sheet formula specifically
 COVER_SHEET_FORMULA_PATTERN = re.compile(
-    r"^=\s*'?\[?\d*\]?Cover\s*Sheet'?!([A-Z]+)(\d+)$",
+    r"^=\s*'?\[?\d*\]?Cover\s*Sheet'?!\$?([A-Z]+)\$?(\d+)$",
     re.IGNORECASE
 )
 
