@@ -13,7 +13,7 @@ from openpyxl import Workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
 if TYPE_CHECKING:
-    pass
+    from app.core.models import Product, ParseResponse
 
 import re
 from openpyxl.cell.cell import Cell
@@ -543,6 +543,38 @@ def _looks_like_repeated_header_row(row_data: dict[str, Any]) -> bool:
     return headerish >= 2
 
 
+def _normalize_doc_code_for_dedup(doc_code: str | None) -> str | None:
+    if doc_code is None:
+        return None
+    normalized = doc_code.strip()
+    return normalized or None
+
+
+def _dedupe_products_by_doc_code(products: list["Product"]) -> list["Product"]:
+    """De-duplicate products by doc_code only.
+
+    Rules:
+      - Use `doc_code` as the only key (after stripping surrounding whitespace).
+      - Keep the first occurrence when duplicates are found.
+      - Keep all products where `doc_code` is None/empty/whitespace.
+    """
+
+    seen: set[str] = set()
+    deduped: list["Product"] = []
+
+    for product in products:
+        doc_code_key = _normalize_doc_code_for_dedup(product.doc_code)
+        if doc_code_key is None:
+            deduped.append(product)
+            continue
+        if doc_code_key in seen:
+            continue
+        seen.add(doc_code_key)
+        deduped.append(product)
+
+    return deduped
+
+
 def parse_workbook(wb: Workbook, filename: str, extract_images: bool = False) -> "ParseResponse":
     """Parse an openpyxl workbook into a structured API response.
 
@@ -569,7 +601,7 @@ def parse_workbook(wb: Workbook, filename: str, extract_images: bool = False) ->
     from app.parser.sheet_detector import find_header_row
 
     schedule_name = get_schedule_name(wb, filename)
-    products = []
+    products: list["Product"] = []
 
     schedule_supporting = {"item_location", "specs", "manufacturer", "notes", "qty", "cost", "product_name"}
 
@@ -615,4 +647,5 @@ def parse_workbook(wb: Workbook, filename: str, extract_images: bool = False) ->
 
             products.append(product)
 
+    products = _dedupe_products_by_doc_code(products)
     return ParseResponse(schedule_name=schedule_name, products=products)
