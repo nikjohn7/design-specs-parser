@@ -72,7 +72,9 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
     Supports the patterns listed in TASKS.md (3.5):
     1) Explicit keys: WIDTH/LENGTH/HEIGHT/DEPTH/THICKNESS
     2) Labeled WxH / WxL blocks: "600 W X 600 H MM"
-    3) Unlabeled sheet-size: "5500 X 2800 MM" (and 3-part "A X B X C MM")
+    3) Parenthesized labels: "1200 (W) x 800 (D) x 330 (H) mm"
+    4) Unlabeled sheet-size: "5500 X 2800 MM" (and 3-part "A X B X C MM")
+    5) Standalone number with unit: "3.66 METRES" (for single dimension values)
 
     Unit conversion:
       - m/metre(s)/meter(s) → mm (×1000)
@@ -137,9 +139,10 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
             label_norm = label.upper()
             if label_norm == "W" and result["width"] is None:
                 result["width"] = mm
-            elif label_norm == "L" and result["length"] is None:
+            elif label_norm in {"L", "D"} and result["length"] is None:
+                # D (Depth) maps to length for labeled dimensions
                 result["length"] = mm
-            elif label_norm in {"H", "D", "T"} and result["height"] is None:
+            elif label_norm in {"H", "T"} and result["height"] is None:
                 result["height"] = mm
 
         set_labeled(a_num, a_label)
@@ -147,7 +150,42 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
         if c_num and c_label:
             set_labeled(c_num, c_label)
 
+    # Pattern 2b: Parenthesized labels like "1200 (W) x 800 (D) x 330 (H) mm"
+    # Match up to 3 dimensions with parenthesized labels
+    paren_labeled = re.search(
+        r'(\d+(?:[.,]\d+)?)\s*\(([WLHDT])\)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*\(([WLHDT])\)(?:\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*\(([WLHDT])\))?\s*(mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?)?\b',
+        normalized,
+        re.IGNORECASE,
+    )
+    if paren_labeled:
+        a_num, a_label = paren_labeled.group(1), paren_labeled.group(2)
+        b_num, b_label = paren_labeled.group(3), paren_labeled.group(4)
+        c_num, c_label = paren_labeled.group(5), paren_labeled.group(6)
+        unit = paren_labeled.group(7)
+
+        def set_paren_labeled(num: str, label: str) -> None:
+            mm = _to_mm(num, unit)
+            if mm is None:
+                return
+            label_norm = label.upper()
+            if label_norm == "W" and result["width"] is None:
+                result["width"] = mm
+            elif label_norm in {"L", "D"} and result["length"] is None:
+                # D (Depth) maps to length for furniture dimensions
+                result["length"] = mm
+            elif label_norm in {"H", "T"} and result["height"] is None:
+                result["height"] = mm
+
+        set_paren_labeled(a_num, a_label)
+        set_paren_labeled(b_num, b_label)
+        if c_num and c_label:
+            set_paren_labeled(c_num, c_label)
+
     # Pattern 3: unlabeled "A X B (X C) MM"
+    # For 3-part patterns like "600 X 400 X 200 MM", interpret as width x length x height
+    # For 2-part patterns:
+    #   - If equal dimensions (600X600): interpret as width x height (common for square tiles)
+    #   - If different dimensions (5500 X 2800): interpret as width x length (common for sheets)
     if result["width"] is None or result["length"] is None or result["height"] is None:
         unlabeled = re.search(
             r'(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)(?:\s*X\s*(\d+(?:[.,]\d+)?))?\s*(mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?)\b',
@@ -158,12 +196,43 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
             a_mm = _to_mm(unlabeled.group(1), unlabeled.group(4))
             b_mm = _to_mm(unlabeled.group(2), unlabeled.group(4))
             c_mm = _to_mm(unlabeled.group(3), unlabeled.group(4)) if unlabeled.group(3) else None
-            if result["width"] is None:
-                result["width"] = a_mm
-            if result["length"] is None:
-                result["length"] = b_mm
-            if result["height"] is None and c_mm is not None:
-                result["height"] = c_mm
+
+            if c_mm is not None:
+                # 3-part: width x length x height
+                if result["width"] is None:
+                    result["width"] = a_mm
+                if result["length"] is None:
+                    result["length"] = b_mm
+                if result["height"] is None:
+                    result["height"] = c_mm
+            else:
+                # 2-part: heuristic based on whether dimensions are equal
+                if a_mm == b_mm:
+                    # Equal dimensions (square, like 600X600): width x height
+                    if result["width"] is None:
+                        result["width"] = a_mm
+                    if result["height"] is None:
+                        result["height"] = b_mm
+                else:
+                    # Different dimensions (rectangular, like 5500 X 2800): width x length
+                    if result["width"] is None:
+                        result["width"] = a_mm
+                    if result["length"] is None:
+                        result["length"] = b_mm
+
+    # Pattern 4: Standalone number with unit (for single dimension values like "3.66 METRES")
+    # Only apply if no dimensions were found yet
+    if result["width"] is None and result["length"] is None and result["height"] is None:
+        standalone = re.search(
+            r'^([0-9]+(?:[.,][0-9]+)?)\s*(mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?)$',
+            normalized.strip(),
+            re.IGNORECASE,
+        )
+        if standalone:
+            mm = _to_mm(standalone.group(1), standalone.group(2))
+            if mm is not None:
+                # For standalone values, assume width (most common single dimension)
+                result["width"] = mm
 
     return result
 
