@@ -113,12 +113,16 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
     if "LENGTH" in explicit:
         result["length"] = explicit["LENGTH"]
 
+    thickness_mm = explicit.get("THICKNESS")
+
     if "HEIGHT" in explicit:
         result["height"] = explicit["HEIGHT"]
     elif "DEPTH" in explicit:
         result["height"] = explicit["DEPTH"]
-    elif "THICKNESS" in explicit:
-        result["height"] = explicit["THICKNESS"]
+    # Do not set height from THICKNESS yet. Some schedules include both SIZE
+    # (e.g., "600 W X 600 H") and THICKNESS (e.g., "10mm"). Prefer the size's
+    # H dimension when present and only fall back to thickness if no other
+    # height-like dimension is found.
 
     # Pattern 2: labeled blocks like "220 W X 2200 L MM" (optionally 3-part)
     # Prefer this only for missing fields so explicit keys win.
@@ -233,6 +237,9 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
             if mm is not None:
                 # For standalone values, assume width (most common single dimension)
                 result["width"] = mm
+
+    if result["height"] is None and thickness_mm is not None:
+        result["height"] = thickness_mm
 
     return result
 
