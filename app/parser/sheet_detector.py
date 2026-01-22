@@ -119,13 +119,23 @@ HEADER_SYNONYMS: dict[str, list[str]] = {
 # Minimum number of recognized headers to consider a row as a header row
 MIN_HEADER_MATCHES = 2
 
-# Key columns that must be present for a sheet to be considered a schedule
-# At minimum, we need a doc_code column
-REQUIRED_COLUMNS = {'doc_code'}
+# Key columns that must be present for a sheet to be considered a schedule.
+#
+# Real-world samples generally have a dedicated doc_code column, but some
+# synthetic/normalized formats encode the code inside the product name (e.g.,
+# "HW-01 - Door Handle") and therefore omit the doc_code header entirely.
+#
+# We allow a sheet to qualify if it has either a doc_code column OR a product_name
+# column, provided there is sufficient additional schedule-like structure.
+# Additional columns that strengthen schedule detection.
+SUPPORTING_COLUMNS = {'item_location', 'specs', 'manufacturer', 'cost', 'qty', 'notes', 'image'}
 
-# Additional columns that strengthen schedule detection
-# Having at least one of these along with doc_code confirms it's a schedule
-SUPPORTING_COLUMNS = {'item_location', 'product_name', 'specs', 'manufacturer', 'cost', 'qty'}
+# Prefer header rows that include at least one of these columns.
+PREFERRED_HEADER_COLUMNS = {'doc_code', 'product_name'}
+
+# For product_name-only schedules, require at least this many supporting columns
+# (excluding the product_name column itself).
+MIN_SUPPORTING_FOR_PRODUCT_NAME_ONLY = 2
 
 
 def _normalize_header(text: str | None) -> str:
@@ -266,8 +276,8 @@ def find_header_row(ws: "Worksheet", max_scan: int = 50) -> int | None:
         if score < MIN_HEADER_MATCHES:
             continue
         
-        # Prefer rows with required columns
-        has_required = bool(matched_columns & REQUIRED_COLUMNS)
+        # Prefer rows that include a primary schedule identifier column.
+        has_required = bool(matched_columns & PREFERRED_HEADER_COLUMNS)
         has_supporting = bool(matched_columns & SUPPORTING_COLUMNS)
         
         # Calculate weighted score
@@ -290,7 +300,7 @@ def find_header_row(ws: "Worksheet", max_scan: int = 50) -> int | None:
     
     # Final validation: must have at least required columns or strong supporting evidence
     if best_row is not None:
-        has_required = bool(best_columns & REQUIRED_COLUMNS)
+        has_required = bool(best_columns & PREFERRED_HEADER_COLUMNS)
         has_multiple_supporting = len(best_columns & SUPPORTING_COLUMNS) >= 2
         
         if has_required or has_multiple_supporting:
@@ -341,8 +351,10 @@ def is_schedule_sheet(ws: "Worksheet", max_scan: int = 50) -> bool:
     
     A worksheet is considered a schedule sheet if:
     1. A header row can be found with recognized column names
-    2. The header row contains at least a doc_code column
-    3. The header row contains at least one supporting column
+    2. The header row contains either a dedicated doc_code column, or a product_name
+       column (for formats that embed codes inside the product name)
+    3. The header row contains sufficient supporting columns (e.g., location, qty,
+       manufacturer, cost) to distinguish it from non-data sheets
     
     This helps filter out cover sheets, legend sheets, and other
     non-data sheets that may be present in the workbook.
@@ -371,14 +383,16 @@ def is_schedule_sheet(ws: "Worksheet", max_scan: int = 50) -> bool:
     # Get the columns found in the header
     columns = get_header_columns(ws, header_row)
     
-    # Must have doc_code column
-    if 'doc_code' not in columns:
-        return False
-    
-    # Must have at least one supporting column
-    has_supporting = bool(set(columns.keys()) & SUPPORTING_COLUMNS)
-    
-    return has_supporting
+    column_names = set(columns.keys())
+
+    if 'doc_code' in column_names:
+        return bool(column_names & SUPPORTING_COLUMNS)
+
+    if 'product_name' in column_names:
+        supporting = column_names & SUPPORTING_COLUMNS
+        return len(supporting) >= MIN_SUPPORTING_FOR_PRODUCT_NAME_ONLY
+
+    return False
 
 
 def get_schedule_sheets(wb) -> list[tuple[str, "Worksheet", int]]:
@@ -405,8 +419,14 @@ def get_schedule_sheets(wb) -> list[tuple[str, "Worksheet", int]]:
         if header_row is not None:
             columns = get_header_columns(ws, header_row)
             
-            # Validate it's a schedule sheet
-            if 'doc_code' in columns and bool(set(columns.keys()) & SUPPORTING_COLUMNS):
+            # Validate it's a schedule sheet.
+            column_names = set(columns.keys())
+            if 'doc_code' in column_names and bool(column_names & SUPPORTING_COLUMNS):
                 schedule_sheets.append((sheet_name, ws, header_row))
+                continue
+            if 'product_name' in column_names:
+                supporting = column_names & SUPPORTING_COLUMNS
+                if len(supporting) >= MIN_SUPPORTING_FOR_PRODUCT_NAME_ONLY:
+                    schedule_sheets.append((sheet_name, ws, header_row))
     
     return schedule_sheets
