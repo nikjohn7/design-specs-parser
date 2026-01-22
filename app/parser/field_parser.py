@@ -581,6 +581,7 @@ def extract_product_fields(
     - Name: -> product_name
     """
     from app.core.models import Product
+    from app.parser.normalizers import parse_dimensions
 
     kv_specs = kv_specs or {}
     kv_manufacturer = kv_manufacturer or {}
@@ -606,6 +607,37 @@ def extract_product_fields(
     finish = get_value(detail_kv, 'FINISH') or get_value(kv_specs, 'FINISH')
     material = get_value(detail_kv, 'MATERIAL') or get_value(kv_specs, 'MATERIAL')
 
+    detail_dim_text = "\n".join(
+        v
+        for v in [
+            get_value(detail_kv, 'WIDTH'),
+            get_value(detail_kv, 'LENGTH'),
+            get_value(detail_kv, 'HEIGHT'),
+            get_value(detail_kv, 'DEPTH'),
+            get_value(detail_kv, 'THICKNESS'),
+            get_value(detail_kv, 'SIZE'),
+        ]
+        if v
+    )
+    specs_dim_text = "\n".join(
+        v
+        for v in [
+            get_value(kv_specs, 'WIDTH'),
+            get_value(kv_specs, 'LENGTH'),
+            get_value(kv_specs, 'HEIGHT'),
+            get_value(kv_specs, 'DEPTH'),
+            get_value(kv_specs, 'THICKNESS'),
+            get_value(kv_specs, 'SIZE'),
+        ]
+        if v
+    )
+
+    detail_dims = parse_dimensions(detail_dim_text) if detail_dim_text else {"width": None, "length": None, "height": None}
+    specs_dims = parse_dimensions(specs_dim_text) if specs_dim_text else {"width": None, "length": None, "height": None}
+    width = detail_dims.get("width") or specs_dims.get("width")
+    length = detail_dims.get("length") or specs_dims.get("length")
+    height = detail_dims.get("height") or specs_dims.get("height")
+
     qty = _parse_qty(row_data.get('qty'))
     rrp = _parse_numeric_price(row_data.get('cost'))
 
@@ -627,6 +659,14 @@ def extract_product_fields(
         used_keys.add('FINISH')
     if material:
         used_keys.add('MATERIAL')
+    if width is not None:
+        used_keys.add('WIDTH')
+    if length is not None:
+        used_keys.add('LENGTH')
+    if height is not None:
+        used_keys.update({'HEIGHT', 'DEPTH', 'THICKNESS'})
+    if detail_dim_text or specs_dim_text:
+        used_keys.add('SIZE')
 
     details_parts: list[str] = []
     specs_details = format_kv_as_details(kv_specs, exclude_keys=used_keys)
@@ -652,6 +692,9 @@ def extract_product_fields(
         colour=colour,
         finish=finish,
         material=material,
+        width=width,
+        length=length,
+        height=height,
         qty=qty,
         rrp=rrp,
         feature_image=None,
