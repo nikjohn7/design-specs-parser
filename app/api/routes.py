@@ -5,10 +5,10 @@ This module defines the REST API endpoints:
 - GET /health: Health check endpoint
 """
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 
-from app.core.models import ErrorResponse, ParseResponse, Product
+from app.core.models import ErrorResponse, ParseResponse
 
 # Create router instance
 router = APIRouter()
@@ -65,7 +65,7 @@ async def parse_schedule(
         ...,
         description="Excel schedule file (.xlsx format)",
     )
-) -> ParseResponse:
+) -> ParseResponse | JSONResponse:
     """Parse an uploaded Excel schedule into structured JSON.
 
     Args:
@@ -73,27 +73,25 @@ async def parse_schedule(
 
     Returns:
         ParseResponse: Parsed schedule containing schedule name and products
-
-    Raises:
-        HTTPException: 400 if file format is invalid or parsing fails
     """
     # Validate file extension
     if not file.filename:
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail=ErrorResponse(
+            content=ErrorResponse(
                 error="Invalid file",
-                detail="No filename provided"
-            ).model_dump()
+                detail="No filename provided",
+            ).model_dump(),
         )
 
     if not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(
+        extension = file.filename.split(".")[-1] if "." in file.filename else "no extension"
+        return JSONResponse(
             status_code=400,
-            detail=ErrorResponse(
+            content=ErrorResponse(
                 error="Invalid file format",
-                detail=f"Expected .xlsx file, got '{file.filename.split('.')[-1] if '.' in file.filename else 'no extension'}'"
-            ).model_dump()
+                detail=f"Expected .xlsx file, got '{extension}'",
+            ).model_dump(),
         )
 
     # TODO: In Phase 2+, implement actual parsing logic
