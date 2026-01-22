@@ -85,7 +85,7 @@ def fill_merged_regions(ws: "Worksheet") -> None:
                     pass
 
 
-def get_merged_cell_value(ws: "Worksheet", row: int, column: int) -> any:
+def get_merged_cell_value(ws: "Worksheet", row: int, column: int) -> Any:
     """Get the effective value of a cell, handling merged regions.
     
     If the cell is part of a merged region, returns the value from

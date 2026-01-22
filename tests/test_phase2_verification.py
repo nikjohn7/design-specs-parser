@@ -373,8 +373,8 @@ class TestPhase2VerificationSyntheticGenerated:
             checked += 1
             detected_rows = [s[2] for s in sheets]
 
-            # Allow tolerance for header row detection
-            tolerance = max(5, expected_row)
+            # Allow a small, fixed tolerance for header row detection
+            tolerance = 5
             if any(abs(d - expected_row) <= tolerance for d in detected_rows):
                 accurate += 1
 

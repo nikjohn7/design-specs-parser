@@ -111,13 +111,6 @@ HEADER_SYNONYMS: dict[str, list[str]] = {
     ],
 }
 
-# Build a reverse lookup: normalized header text -> canonical name
-_HEADER_LOOKUP: dict[str, str] = {}
-for canonical, synonyms in HEADER_SYNONYMS.items():
-    for synonym in synonyms:
-        _HEADER_LOOKUP[synonym.lower().strip()] = canonical
-
-
 # Minimum number of recognized headers to consider a row as a header row
 MIN_HEADER_MATCHES = 2
 
@@ -165,6 +158,15 @@ def _normalize_header(text: str | None) -> str:
     text = text.rstrip(':.-')
     
     return text
+
+
+# Build a reverse lookup: normalized header text -> canonical name
+_HEADER_LOOKUP: dict[str, str] = {}
+for canonical, synonyms in HEADER_SYNONYMS.items():
+    for synonym in synonyms:
+        normalized_synonym = _normalize_header(synonym)
+        if normalized_synonym:
+            _HEADER_LOOKUP[normalized_synonym] = canonical
 
 
 def _match_header(text: str) -> str | None:
