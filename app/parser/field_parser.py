@@ -433,3 +433,228 @@ def has_kv_content(text: str | None) -> bool:
 
     kv = parse_kv_block(text)
     return len(kv) > 0
+
+
+def _coerce_nonempty_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        v = value.strip()
+        return v or None
+    v = str(value).strip()
+    return v or None
+
+
+def _parse_qty(value: Any) -> int | None:
+    """Parse quantity from a worksheet value.
+
+    Accepts ints/floats (normalizes 1.0 -> 1) and strings like "2", "2.0", "2 pcs".
+    """
+    if value is None or value is False:
+        return None
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value if value >= 0 else None
+
+    if isinstance(value, float):
+        if value < 0:
+            return None
+        if value.is_integer():
+            return int(value)
+        # Very occasionally Excel stores quantities as floats; only accept if very close to an int
+        rounded = round(value)
+        if abs(value - rounded) < 1e-6:
+            return int(rounded)
+        return None
+
+    text = _coerce_nonempty_str(value)
+    if not text:
+        return None
+
+    match = re.search(r'(\d+(?:\.\d+)?)', text.replace(',', ''))
+    if not match:
+        return None
+
+    try:
+        number = float(match.group(1))
+    except ValueError:
+        return None
+
+    if number < 0:
+        return None
+    if number.is_integer():
+        return int(number)
+    rounded = round(number)
+    if abs(number - rounded) < 1e-6:
+        return int(rounded)
+    return None
+
+
+def _parse_numeric_price(value: Any) -> float | None:
+    """Parse a numeric unit price from a worksheet value.
+
+    Task 3.4 scope: prefer numeric price columns when present. This helper is
+    intentionally conservative; full text price parsing is implemented in 3.6.
+    """
+    if value is None or value is False:
+        return None
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        v = float(value)
+        return v if v >= 0 else None
+
+    text = _coerce_nonempty_str(value)
+    if not text:
+        return None
+
+    # Strip common currency formatting and parse if the result is purely numeric-ish.
+    cleaned = text.strip().replace(',', '')
+    cleaned = re.sub(r'^\$', '', cleaned)
+    if not re.fullmatch(r'\d+(?:\.\d+)?', cleaned):
+        return None
+
+    try:
+        v = float(cleaned)
+    except ValueError:
+        return None
+    return v if v >= 0 else None
+
+
+def _build_product_description(section: str | None, item_location: str | None) -> str | None:
+    section = _coerce_nonempty_str(section)
+    item_location = _coerce_nonempty_str(item_location)
+
+    if section and item_location:
+        return f"{section} | {item_location}"
+    if section:
+        return section
+    return item_location
+
+
+def _normalize_detail_rows(detail_rows: Any) -> dict[str, str]:
+    """Normalize grouped-layout detail rows into a KV dict.
+
+    Expected detail_rows format from row_extractor:
+      [{'key': 'maker', 'value': 'Acme'}, ...]
+    """
+    if not detail_rows or not isinstance(detail_rows, list):
+        return {}
+
+    kv: dict[str, str] = {}
+    for item in detail_rows:
+        if not isinstance(item, dict):
+            continue
+        key = normalize_key(_coerce_nonempty_str(item.get('key')))
+        value = _coerce_nonempty_str(item.get('value'))
+        if not key or not value:
+            continue
+        if key not in kv:
+            kv[key] = value
+    return kv
+
+
+def extract_product_fields(
+    row_data: dict[str, Any],
+    kv_specs: dict[str, str] | None,
+    kv_manufacturer: dict[str, str] | None,
+):
+    """Extract a Product model from raw row data and parsed KV blocks.
+
+    This function maps the most common schedule fields into the Product schema:
+    - PRODUCT/NAME/RANGE -> product_name (priority order, with grouped-row overrides)
+    - COMPOSITION/MATERIAL/SPECIES -> material (normalized by parse_kv_block)
+    - COLOUR/COLOR -> colour (normalized to COLOUR)
+    - FINISH -> finish
+    - qty from quantity columns when present (normalize 1.0 -> 1)
+    - rrp from numeric price columns when present
+    - product_description from section + item_location
+    - product_details from remaining KV pairs
+
+    For grouped rows (sample3 style), detail rows take precedence:
+    - Maker: -> brand
+    - Name: -> product_name
+    """
+    from app.core.models import Product
+
+    kv_specs = kv_specs or {}
+    kv_manufacturer = kv_manufacturer or {}
+
+    detail_kv = _normalize_detail_rows(row_data.get('detail_rows'))
+
+    # Product name: grouped rows override everything else
+    product_name = (
+        get_value(detail_kv, 'NAME')
+        or _coerce_nonempty_str(row_data.get('item_name'))
+        or get_value(kv_specs, 'PRODUCT', 'NAME', 'RANGE')
+    )
+
+    # Brand: grouped Maker overrides, else manufacturer block NAME, else explicit keys.
+    brand = (
+        get_value(detail_kv, 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
+        or get_value(kv_manufacturer, 'NAME')
+        or get_value(kv_specs, 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
+    )
+
+    # Other scalar fields from specs/detail
+    colour = get_value(detail_kv, 'COLOUR') or get_value(kv_specs, 'COLOUR')
+    finish = get_value(detail_kv, 'FINISH') or get_value(kv_specs, 'FINISH')
+    material = get_value(detail_kv, 'MATERIAL') or get_value(kv_specs, 'MATERIAL')
+
+    qty = _parse_qty(row_data.get('qty'))
+    rrp = _parse_numeric_price(row_data.get('cost'))
+
+    product_description = _build_product_description(
+        section=_coerce_nonempty_str(row_data.get('section')),
+        item_location=_coerce_nonempty_str(row_data.get('item_location')),
+    )
+
+    # Build product_details from remaining KV pairs.
+    used_keys: set[str] = set()
+    if product_name:
+        # We might have sourced from any of these.
+        used_keys.update({'PRODUCT', 'NAME', 'RANGE'})
+    if brand:
+        used_keys.update({'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER', 'NAME'})
+    if colour:
+        used_keys.add('COLOUR')
+    if finish:
+        used_keys.add('FINISH')
+    if material:
+        used_keys.add('MATERIAL')
+
+    details_parts: list[str] = []
+    specs_details = format_kv_as_details(kv_specs, exclude_keys=used_keys)
+    if specs_details:
+        details_parts.append(specs_details)
+
+    manufacturer_exclude = set(used_keys)
+    manufacturer_exclude.add('NAME')  # avoid duplicating the brand in details
+    manufacturer_details = format_kv_as_details(kv_manufacturer, exclude_keys=manufacturer_exclude)
+    if manufacturer_details:
+        details_parts.append(manufacturer_details)
+
+    detail_details = format_kv_as_details(detail_kv, exclude_keys=used_keys)
+    if detail_details:
+        details_parts.append(detail_details)
+
+    product_details = ' | '.join(details_parts) if details_parts else None
+
+    return Product(
+        doc_code=_coerce_nonempty_str(row_data.get('doc_code')),
+        product_name=product_name,
+        brand=brand,
+        colour=colour,
+        finish=finish,
+        material=material,
+        qty=qty,
+        rrp=rrp,
+        feature_image=None,
+        product_description=product_description,
+        product_details=product_details,
+    )

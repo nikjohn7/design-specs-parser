@@ -16,6 +16,7 @@ from app.parser.field_parser import (
     get_value,
     format_kv_as_details,
     has_kv_content,
+    extract_product_fields,
 )
 
 
@@ -557,3 +558,72 @@ Install per manufacturer specification."""
         assert result['CODE'] == 'A008'
         # Non-KV line should be skipped
         assert 'Install per manufacturer specification' not in str(result.values())
+
+
+class TestExtractProductFields:
+    def test_extracts_fields_single_row_layout(self):
+        kv_specs = parse_kv_block(
+            """PRODUCT: ICONIC
+CODE: 50/2833
+COLOUR: SILVER SHADOW
+COMPOSITION: 80% WOOL 20% SYNTHETIC
+STYLE: TWIST"""
+        )
+        kv_manufacturer = parse_kv_block(
+            """NAME: VICTORIA CARPETS
+ADDRESS: 7-29 GLADSTONE ROAD"""
+        )
+        row_data = {
+            "doc_code": "FCA-01 A",
+            "section": "FLOORING",
+            "item_location": "CARPET | APARTMENTS | GOLD SCHEME",
+            "qty": 1.0,
+            "cost": 45.5,
+            "detail_rows": [],
+        }
+
+        product = extract_product_fields(row_data=row_data, kv_specs=kv_specs, kv_manufacturer=kv_manufacturer)
+
+        assert product.doc_code == "FCA-01 A"
+        assert product.product_name == "ICONIC"
+        assert product.brand == "VICTORIA CARPETS"
+        assert product.colour == "SILVER SHADOW"
+        assert product.material == "80% WOOL 20% SYNTHETIC"
+        assert product.qty == 1
+        assert product.rrp == 45.5
+        assert product.product_description == "FLOORING | CARPET | APARTMENTS | GOLD SCHEME"
+
+        assert product.product_details
+        assert "CODE: 50/2833" in product.product_details
+        assert "STYLE: TWIST" in product.product_details
+        assert "PRODUCT:" not in product.product_details
+        assert "COLOUR:" not in product.product_details
+
+    def test_grouped_detail_rows_override_product_name_and_brand(self):
+        kv_specs = parse_kv_block(
+            """PRODUCT: Fallback Name
+COLOUR: Black"""
+        )
+        kv_manufacturer = parse_kv_block("""NAME: Fallback Brand""")
+
+        row_data = {
+            "doc_code": "F88",
+            "section": None,
+            "item_location": "LIVING",
+            "item_name": "Fallback Item Name",
+            "qty": "2.0",
+            "cost": "100",
+            "detail_rows": [
+                {"key": "maker", "value": "Eaglestone"},
+                {"key": "name", "value": "Rectangular plinth coffee table"},
+            ],
+        }
+
+        product = extract_product_fields(row_data=row_data, kv_specs=kv_specs, kv_manufacturer=kv_manufacturer)
+
+        assert product.doc_code == "F88"
+        assert product.brand == "Eaglestone"
+        assert product.product_name == "Rectangular plinth coffee table"
+        assert product.qty == 2
+        assert product.rrp == 100.0
+        assert product.product_description == "LIVING"
