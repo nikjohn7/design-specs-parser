@@ -22,6 +22,7 @@ python tools/generate_programa_test_schedules.py --mode both --samples_dir ./dat
 
 # Test endpoint
 curl -X POST -F "file=@data/schedule_sample1.xlsx" http://localhost:8000/parse | jq
+curl -X POST -F "file=@data/schedule_sample3.xlsx" http://localhost:8000/parse | jq
 
 # Docker
 docker build -t programa-parser . && docker run -p 8000:8000 programa-parser
@@ -45,23 +46,25 @@ app/
     ├── workbook.py      # Load workbook, get schedule_name
     ├── sheet_detector.py # Find headers, detect schedule sheets
     ├── column_mapper.py  # Map headers → canonical columns
-    ├── row_extractor.py  # Iterate products, propagate sections
+    ├── row_extractor.py  # Iterate products (row-per-product + grouped detail rows)
     ├── field_parser.py   # Parse KEY: VALUE from spec text
-    └── normalizers.py    # Dimensions (→mm), prices
+    └── normalizers.py    # Dimensions (→mm), qty, prices
 tools/
 └── generate_programa_test_schedules.py  # ✅ Synthetic test generator
 data/
 ├── schedule_sample1.xlsx
-└── schedule_sample2.xlsx
+├── schedule_sample2.xlsx
+└── schedule_sample3.xlsx
 ```
 
 ## Known Gotchas
 
 - **Formula references**: Sample2 has `='[1]Cover Sheet'!A6` (external workbook ref) — openpyxl can't resolve. Fallback to reading Cover Sheet!A6 directly.
-- **Spec code patterns**: Must handle `FCA-01 A`, `PTF-*K`, `FTI-01  B` (double space). Regex: `r'^[A-Z]{2,4}-[\dA-Z\*]+[A-Z]?\s*[A-Z]?$'`
+- **doc_code variability**: `doc_code` can be short alphanumeric (e.g., `L1`, `F64`) or complex (e.g., `FCA-01 A`, `PTF-*K`). Treat it as an opaque string; don’t use a strict regex as a gate for product rows.
 - **KV separators**: Specs use both `:` and `-` as delimiters. Some have no space: `FINISH- MATT`
 - **Merged cells**: openpyxl returns `None` for non-top-left cells in merged ranges. Must fill before reading.
 - **Sheet name trailing space**: Sample2 has `"Sales Schedule "` (with space). Use `.strip()` for comparisons.
+- **Grouped product rows**: Sample3 uses a product “item row” followed by detail rows (`Maker:`, `Name:`, `Finish:`, `Size:`, `Notes:`) that must be attached to the preceding item row.
 
 ## Code Style
 
@@ -101,9 +104,11 @@ Check `.claude/` for available skills and hooks before starting tasks:
 |------|--------|------------|----------|------------|
 | sample1.xlsx | APARTMENTS | 4 | ~74 | Yes |
 | sample2.xlsx | Cover Sheet, Schedule, Sales Schedule | 9 | ~53 | No |
+| sample3.xlsx | Schedule | 10 | Varies (row-grouped items) | Yes |
 
 ## Don't Forget
 
 - Run `pytest` before committing
 - Update this file's "Current State" as phases complete
 - Check `/docs` endpoint works after API changes
+- Include a Mermaid architecture diagram in `README.md` for submission
