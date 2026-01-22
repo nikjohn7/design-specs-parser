@@ -607,30 +607,20 @@ def extract_product_fields(
     finish = get_value(detail_kv, 'FINISH') or get_value(kv_specs, 'FINISH')
     material = get_value(detail_kv, 'MATERIAL') or get_value(kv_specs, 'MATERIAL')
 
-    detail_dim_text = "\n".join(
-        v
-        for v in [
-            get_value(detail_kv, 'WIDTH'),
-            get_value(detail_kv, 'LENGTH'),
-            get_value(detail_kv, 'HEIGHT'),
-            get_value(detail_kv, 'DEPTH'),
-            get_value(detail_kv, 'THICKNESS'),
-            get_value(detail_kv, 'SIZE'),
-        ]
-        if v
-    )
-    specs_dim_text = "\n".join(
-        v
-        for v in [
-            get_value(kv_specs, 'WIDTH'),
-            get_value(kv_specs, 'LENGTH'),
-            get_value(kv_specs, 'HEIGHT'),
-            get_value(kv_specs, 'DEPTH'),
-            get_value(kv_specs, 'THICKNESS'),
-            get_value(kv_specs, 'SIZE'),
-        ]
-        if v
-    )
+    def build_dimension_text(kv: dict[str, str]) -> str:
+        lines: list[str] = []
+        for key in ("WIDTH", "LENGTH", "HEIGHT", "DEPTH", "THICKNESS", "SIZE"):
+            value = get_value(kv, key)
+            if not value:
+                continue
+            if re.search(rf'^\s*{re.escape(key)}\b', value, re.IGNORECASE):
+                lines.append(value)
+            else:
+                lines.append(f"{key}: {value}")
+        return "\n".join(lines)
+
+    detail_dim_text = build_dimension_text(detail_kv)
+    specs_dim_text = build_dimension_text(kv_specs)
 
     detail_dims = parse_dimensions(detail_dim_text) if detail_dim_text else {"width": None, "length": None, "height": None}
     specs_dims = parse_dimensions(specs_dim_text) if specs_dim_text else {"width": None, "length": None, "height": None}

@@ -599,6 +599,23 @@ ADDRESS: 7-29 GLADSTONE ROAD"""
         assert "PRODUCT:" not in product.product_details
         assert "COLOUR:" not in product.product_details
 
+    def test_dimension_keys_preserved_before_parsing(self):
+        kv_specs = parse_kv_block(
+            """PRODUCT: SAMPLE
+THICKNESS: 10MM"""
+        )
+        row_data = {
+            "doc_code": "T1",
+            "qty": 1.0,
+            "detail_rows": [],
+        }
+
+        product = extract_product_fields(row_data=row_data, kv_specs=kv_specs, kv_manufacturer={})
+
+        assert product.width is None
+        assert product.length is None
+        assert product.height == 10
+
     def test_grouped_detail_rows_override_product_name_and_brand(self):
         kv_specs = parse_kv_block(
             """PRODUCT: Fallback Name
