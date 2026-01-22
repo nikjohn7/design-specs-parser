@@ -91,8 +91,8 @@ Check `.claude/` for available skills and hooks before starting tasks:
 ## Current State
 
 - [x] Test data generator implemented (`tools/`)
-- [ ] Phase 1: API skeleton + models
-- [ ] Phase 2: Sheet detection + merged cells
+- [x] Phase 1: API skeleton + models
+- [x] Phase 2: Sheet detection + merged cells
 - [ ] Phase 3: Row extraction + field parsing
 - [ ] Phase 4: Orchestration + de-dup
 - [ ] Phase 5: Testing
