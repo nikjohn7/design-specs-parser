@@ -43,7 +43,6 @@ HEADER_SYNONYMS: dict[str, list[str]] = {
     
     # Item/location/description column
     'item_location': [
-        'item',
         'location',
         'description',
         'item & location',
@@ -51,6 +50,12 @@ HEADER_SYNONYMS: dict[str, list[str]] = {
         'area',
         'room',
         'space',
+    ],
+
+    # Product name / item name column (common in normalized schedules)
+    'product_name': [
+        'product name',
+        'item name',
     ],
     
     # Specifications column
@@ -120,7 +125,7 @@ REQUIRED_COLUMNS = {'doc_code'}
 
 # Additional columns that strengthen schedule detection
 # Having at least one of these along with doc_code confirms it's a schedule
-SUPPORTING_COLUMNS = {'item_location', 'specs', 'manufacturer', 'cost', 'qty'}
+SUPPORTING_COLUMNS = {'item_location', 'product_name', 'specs', 'manufacturer', 'cost', 'qty'}
 
 
 def _normalize_header(text: str | None) -> str:

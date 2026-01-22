@@ -36,6 +36,15 @@ COLUMN_SYNONYMS: dict[str, list[str]] = {
         'product no',
         'product number',
     ],
+
+    # Product name / item name column (common in normalized schedules)
+    'product_name': [
+        'product name',
+        'item name',
+        'product',
+        'name',
+        'item',
+    ],
     
     # Image column
     'image': [
@@ -53,7 +62,6 @@ COLUMN_SYNONYMS: dict[str, list[str]] = {
     
     # Item/location/description column
     'item_location': [
-        'item',
         'location',
         'description',
         'item & location',
