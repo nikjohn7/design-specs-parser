@@ -581,7 +581,7 @@ def extract_product_fields(
     - Name: -> product_name
     """
     from app.core.models import Product
-    from app.parser.normalizers import parse_dimensions
+    from app.parser.normalizers import parse_dimensions, parse_price
 
     kv_specs = kv_specs or {}
     kv_manufacturer = kv_manufacturer or {}
@@ -640,6 +640,21 @@ def extract_product_fields(
 
     qty = _parse_qty(row_data.get('qty'))
     rrp = _parse_numeric_price(row_data.get('cost'))
+    if rrp is None:
+        # Some schedules store price as free-text in the cost column or within the specs/notes block.
+        # Keep this as a fallback so numeric columns (sample3) always win.
+        candidate_texts: list[Any] = [
+            row_data.get('cost'),
+            row_data.get('specs'),
+            row_data.get('notes'),
+            kv_specs.get('PRICE'),
+            kv_specs.get('COST'),
+            kv_specs.get('RRP'),
+        ]
+        for candidate in candidate_texts:
+            rrp = parse_price(candidate if isinstance(candidate, str) else (str(candidate) if candidate is not None else None))
+            if rrp is not None:
+                break
 
     product_description = _build_product_description(
         section=_coerce_nonempty_str(row_data.get('section')),

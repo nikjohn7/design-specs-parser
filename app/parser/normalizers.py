@@ -1,6 +1,6 @@
 """Normalization utilities for schedule parsing.
 
-Currently this module provides dimension parsing utilities.
+This module provides parsing/normalization helpers for messy schedule text.
 """
 
 from __future__ import annotations
@@ -167,3 +167,62 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
 
     return result
 
+
+_NON_NUMERIC_PRICE_PATTERN = re.compile(
+    r'^\s*(?:tbc|tba|poa|n/?a|na|nil|-\s*)\s*$',
+    re.IGNORECASE,
+)
+
+# First preference: explicit currency marker like "$25+GST" or "$45.50 PER SQM"
+_DOLLAR_AMOUNT_PATTERN = re.compile(
+    r'\$\s*(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)',
+    re.IGNORECASE,
+)
+
+# Fallback: amount near a price context word (RRP/PRICE/COST) when "$" is absent.
+_CONTEXT_AMOUNT_PATTERN = re.compile(
+    r'\b(?:rrp|price|cost|unit\s*cost|rate)\b[^\d$]{0,20}(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)',
+    re.IGNORECASE,
+)
+
+
+def parse_price(text: str | None) -> float | None:
+    """Parse a unit price from messy schedule text.
+
+    Task 3.6 scope:
+    - Extract numeric value from patterns like "$45.50", "$25+GST", "$X PER SQM".
+    - Ignore non-numeric tokens like "TBC", "POA", "N/A" (return None).
+    - Handle empty/None input (return None).
+
+    Notes:
+    - Prefer using numeric price columns when available; this function is for
+      free-text cases where the sheet stores prices as strings.
+    - This function is intentionally conservative to avoid mis-parsing unrelated
+      numbers (e.g., dimensions, phone numbers).
+    """
+    if text is None:
+        return None
+
+    raw = str(text).strip()
+    if not raw:
+        return None
+
+    if _NON_NUMERIC_PRICE_PATTERN.match(raw):
+        return None
+
+    match = _DOLLAR_AMOUNT_PATTERN.search(raw)
+    if not match:
+        match = _CONTEXT_AMOUNT_PATTERN.search(raw)
+    if not match:
+        return None
+
+    num_text = match.group("num").replace(",", "").strip()
+    try:
+        value = float(num_text)
+    except ValueError:
+        return None
+
+    if value < 0:
+        return None
+
+    return value

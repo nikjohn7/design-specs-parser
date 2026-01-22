@@ -1,4 +1,4 @@
-from app.parser.normalizers import parse_dimensions
+from app.parser.normalizers import parse_dimensions, parse_price
 
 
 class TestParseDimensions:
@@ -36,3 +36,33 @@ class TestParseDimensions:
         assert dims["width"] == 1200
         assert dims["length"] == 800
         assert dims["height"] == 330
+
+
+class TestParsePrice:
+    def test_none_input(self):
+        assert parse_price(None) is None
+
+    def test_empty_input(self):
+        assert parse_price("") is None
+        assert parse_price("   ") is None
+
+    def test_non_numeric_tokens(self):
+        assert parse_price("TBC") is None
+        assert parse_price("POA") is None
+        assert parse_price("N/A") is None
+        assert parse_price("-") is None
+
+    def test_dollar_amount(self):
+        assert parse_price("$45.50") == 45.50
+        assert parse_price("$25+GST") == 25.0
+        assert parse_price("$25 +GST PER SQM") == 25.0
+
+    def test_thousands_separator(self):
+        assert parse_price("$1,234.56") == 1234.56
+
+    def test_context_without_dollar(self):
+        assert parse_price("RRP 199.99") == 199.99
+        assert parse_price("Cost per unit: 25") == 25.0
+
+    def test_avoids_unrelated_numbers(self):
+        assert parse_price("SIZE: 600 X 600 MM") is None
