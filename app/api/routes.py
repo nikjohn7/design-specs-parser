@@ -5,13 +5,18 @@ This module defines the REST API endpoints:
 - GET /health: Health check endpoint
 """
 
+import logging
+
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.core.models import ErrorResponse, ParseResponse
+from app.parser.workbook import WorkbookLoadError, load_workbook_safe, parse_workbook
+from app.parser.sheet_detector import get_schedule_sheets
 
 # Create router instance
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -85,7 +90,7 @@ async def parse_schedule(
         )
 
     if not file.filename.lower().endswith(".xlsx"):
-        extension = file.filename.split(".")[-1] if "." in file.filename else "no extension"
+        extension = file.filename[file.filename.rfind(".") :] if "." in file.filename else "no extension"
         return JSONResponse(
             status_code=400,
             content=ErrorResponse(
@@ -94,14 +99,49 @@ async def parse_schedule(
             ).model_dump(),
         )
 
-    # TODO: In Phase 2+, implement actual parsing logic
-    # For now, return dummy response with hardcoded schedule_name and empty products
+    try:
+        file_bytes = await file.read()
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content=ErrorResponse(
+                error="Failed to read upload",
+                detail=f"{type(e).__name__}: {e}",
+            ).model_dump(),
+        )
+    finally:
+        try:
+            await file.close()
+        except Exception:
+            pass
 
-    # Extract schedule name from filename (remove extension)
-    schedule_name = file.filename.rsplit(".", 1)[0] if file.filename else "Unknown Schedule"
+    try:
+        wb = load_workbook_safe(file_bytes)
+        schedule_sheets = get_schedule_sheets(wb)
+        parsed = parse_workbook(wb, filename=file.filename)
 
-    # Return dummy ParseResponse
-    return ParseResponse(
-        schedule_name=schedule_name,
-        products=[]
-    )
+        logger.info(
+            "Parsed workbook filename=%s sheets_total=%d schedule_sheets=%d products=%d",
+            file.filename,
+            len(wb.sheetnames),
+            len(schedule_sheets),
+            len(parsed.products),
+        )
+
+        return parsed
+    except WorkbookLoadError as e:
+        return JSONResponse(
+            status_code=400,
+            content=ErrorResponse(
+                error=e.message,
+                detail=e.detail,
+            ).model_dump(),
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content=ErrorResponse(
+                error="Failed to parse workbook",
+                detail=f"{type(e).__name__}: {e}",
+            ).model_dump(),
+        )

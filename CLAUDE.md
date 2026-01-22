@@ -94,7 +94,7 @@ Check `.claude/` for available skills and hooks before starting tasks:
 - [x] Phase 1: API skeleton + models
 - [x] Phase 2: Sheet detection + merged cells
 - [x] Phase 3: Row extraction + field parsing
-- [ ] Phase 4: Orchestration + de-dup
+- [x] Phase 4: Orchestration + de-dup
 - [ ] Phase 5: Testing
 - [ ] Phase 6: Polish (Docker, README, diagram)
 

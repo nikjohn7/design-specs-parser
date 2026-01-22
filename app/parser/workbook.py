@@ -6,14 +6,14 @@ error handling for invalid, corrupt, or unsupported files.
 
 import io
 import zipfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
 if TYPE_CHECKING:
-    pass
+    from app.core.models import Product, ParseResponse
 
 import re
 from openpyxl.cell.cell import Cell
@@ -490,3 +490,162 @@ def _filename_to_schedule_name(filename: str) -> str:
         return "Unknown Schedule"
     
     return name
+
+
+def _looks_like_repeated_header_row(row_data: dict[str, Any]) -> bool:
+    """Heuristic to skip header rows repeated mid-sheet.
+
+    Synthetic and real-world schedules sometimes repeat the header row in the
+    middle of a sheet (e.g., after a page break). The row extractor treats these
+    as potential product rows, so we filter them out here.
+    """
+
+    def norm(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip().lower()
+
+    doc_code = norm(row_data.get("doc_code"))
+    if not doc_code:
+        return False
+
+    # Must look like a header cell for the doc_code column, plus at least 2 other
+    # header-like cells in common columns.
+    doc_code_headers = {
+        "spec code",
+        "doc code",
+        "drawing code",
+        "code",
+        "ref",
+        "ref no",
+        "reference",
+        "id",
+        "sku",
+        "item code",
+        "product code",
+    }
+    if doc_code not in doc_code_headers:
+        return False
+
+    headerish = 0
+    candidates: dict[str, set[str]] = {
+        "item_location": {"item & location", "item and location", "area", "room", "location", "description"},
+        "specs": {"specification", "specifications", "specs", "notes/comments", "details", "spec"},
+        "manufacturer": {"manufacturer", "supplier", "brand", "vendor", "maker", "manufacturer / supplier"},
+        "notes": {"notes", "comments", "remarks"},
+        "qty": {"qty", "quantity", "units", "no.", "no"},
+        "cost": {"cost", "rrp", "price", "indicative cost", "cost per unit", "unit price", "unit cost", "$"},
+    }
+    for key, values in candidates.items():
+        if norm(row_data.get(key)) in values:
+            headerish += 1
+
+    return headerish >= 2
+
+
+def _normalize_doc_code_for_dedup(doc_code: str | None) -> str | None:
+    if doc_code is None:
+        return None
+    normalized = doc_code.strip()
+    return normalized or None
+
+
+def _dedupe_products_by_doc_code(products: list["Product"]) -> list["Product"]:
+    """De-duplicate products by doc_code only.
+
+    Rules:
+      - Use `doc_code` as the only key (after stripping surrounding whitespace).
+      - Keep the first occurrence when duplicates are found.
+      - Keep all products where `doc_code` is None/empty/whitespace.
+    """
+
+    seen: set[str] = set()
+    deduped: list["Product"] = []
+
+    for product in products:
+        doc_code_key = _normalize_doc_code_for_dedup(product.doc_code)
+        if doc_code_key is None:
+            deduped.append(product)
+            continue
+        if doc_code_key in seen:
+            continue
+        seen.add(doc_code_key)
+        deduped.append(product)
+
+    return deduped
+
+
+def parse_workbook(wb: Workbook, filename: str, extract_images: bool = False) -> "ParseResponse":
+    """Parse an openpyxl workbook into a structured API response.
+
+    Orchestrates the full parsing pipeline:
+      - determine schedule name
+      - iterate schedule-like sheets
+      - fill merged cells
+      - detect header row and map columns
+      - extract raw product rows and parse into Product models
+
+    Args:
+        wb: Loaded openpyxl workbook.
+        filename: Original filename (used for schedule_name fallback).
+        extract_images: Reserved for future use (feature_image extraction is not implemented).
+
+    Returns:
+        ParseResponse with schedule_name and combined products from all schedule sheets.
+    """
+    from app.core.models import ParseResponse
+    from app.parser.column_mapper import map_columns
+    from app.parser.field_parser import extract_product_fields, parse_kv_block
+    from app.parser.merged_cells import fill_merged_regions
+    from app.parser.row_extractor import iter_product_rows
+    from app.parser.sheet_detector import find_header_row
+
+    schedule_name = get_schedule_name(wb, filename)
+    products: list["Product"] = []
+
+    schedule_supporting = {"item_location", "specs", "manufacturer", "notes", "qty", "cost", "product_name"}
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+
+        try:
+            fill_merged_regions(ws)
+        except Exception:
+            pass
+
+        header_row = find_header_row(ws)
+        if header_row is None:
+            continue
+
+        col_map = map_columns(ws, header_row=header_row)
+        if "doc_code" not in col_map and "product_name" not in col_map:
+            continue
+        if not (set(col_map.keys()) & schedule_supporting):
+            continue
+
+        for row_data in iter_product_rows(ws, header_row=header_row, col_map=col_map):
+            if _looks_like_repeated_header_row(row_data):
+                continue
+
+            kv_specs = parse_kv_block(row_data.get("specs"))
+            kv_manufacturer = parse_kv_block(row_data.get("manufacturer"))
+
+            product = extract_product_fields(row_data, kv_specs, kv_manufacturer)
+            if not any(
+                (
+                    product.doc_code,
+                    product.product_name,
+                    product.brand,
+                    product.colour,
+                    product.finish,
+                    product.material,
+                    product.product_description,
+                    product.product_details,
+                )
+            ):
+                continue
+
+            products.append(product)
+
+    products = _dedupe_products_by_doc_code(products)
+    return ParseResponse(schedule_name=schedule_name, products=products)

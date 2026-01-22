@@ -588,24 +588,88 @@ def extract_product_fields(
 
     detail_kv = _normalize_detail_rows(row_data.get('detail_rows'))
 
+    def _parse_mm_cell(value: Any) -> int | None:
+        if value is None or value is False:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value if value >= 0 else None
+        if isinstance(value, float):
+            if value < 0:
+                return None
+            if value.is_integer():
+                return int(value)
+            rounded = round(value)
+            if abs(value - rounded) < 1e-6:
+                return int(rounded)
+            return None
+        text = _coerce_nonempty_str(value)
+        if not text:
+            return None
+        match = re.search(r'(\d+(?:[.,]\d+)?)', text.replace(',', ''))
+        if not match:
+            return None
+        try:
+            number = float(match.group(1))
+        except ValueError:
+            return None
+        if number < 0:
+            return None
+        if number.is_integer():
+            return int(number)
+        rounded = round(number)
+        if abs(number - rounded) < 1e-6:
+            return int(rounded)
+        return None
+
     # Product name: grouped rows override everything else
     product_name = (
         get_value(detail_kv, 'NAME')
+        or _coerce_nonempty_str(row_data.get('product_name'))
         or _coerce_nonempty_str(row_data.get('item_name'))
         or get_value(kv_specs, 'PRODUCT', 'NAME', 'RANGE')
     )
+
+    doc_code = _coerce_nonempty_str(row_data.get('doc_code'))
+    if not doc_code:
+        combined = _coerce_nonempty_str(row_data.get('product_name'))
+        if combined:
+            for delim in (" - ", " – ", " — ", ": "):
+                if delim not in combined:
+                    continue
+                left, right = combined.split(delim, 1)
+                left = left.strip()
+                right = right.strip()
+                if not left or not right:
+                    continue
+                if len(left) > 30:
+                    continue
+                doc_code = left
+                if product_name == combined:
+                    product_name = right
+                break
+    if not doc_code:
+        image_value = _coerce_nonempty_str(row_data.get('image'))
+        if image_value:
+            match = re.search(r'/([^/]+?)\.(?:jpg|jpeg|png|gif|webp)\b', image_value, re.IGNORECASE)
+            if match:
+                candidate = match.group(1).strip()
+                if candidate and len(candidate) <= 30 and " " not in candidate:
+                    doc_code = candidate
 
     # Brand: grouped Maker overrides, else manufacturer block NAME, else explicit keys.
     brand = (
         get_value(detail_kv, 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
         or get_value(kv_manufacturer, 'NAME')
+        or (_coerce_nonempty_str(row_data.get('manufacturer')) if not kv_manufacturer else None)
         or get_value(kv_specs, 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
     )
 
     # Other scalar fields from specs/detail
-    colour = get_value(detail_kv, 'COLOUR') or get_value(kv_specs, 'COLOUR')
-    finish = get_value(detail_kv, 'FINISH') or get_value(kv_specs, 'FINISH')
-    material = get_value(detail_kv, 'MATERIAL') or get_value(kv_specs, 'MATERIAL')
+    colour = get_value(detail_kv, 'COLOUR') or get_value(kv_specs, 'COLOUR') or _coerce_nonempty_str(row_data.get('colour'))
+    finish = get_value(detail_kv, 'FINISH') or get_value(kv_specs, 'FINISH') or _coerce_nonempty_str(row_data.get('finish'))
+    material = get_value(detail_kv, 'MATERIAL') or get_value(kv_specs, 'MATERIAL') or _coerce_nonempty_str(row_data.get('material'))
 
     def build_dimension_text(kv: dict[str, str]) -> str:
         lines: list[str] = []
@@ -624,9 +688,9 @@ def extract_product_fields(
 
     detail_dims = parse_dimensions(detail_dim_text) if detail_dim_text else {"width": None, "length": None, "height": None}
     specs_dims = parse_dimensions(specs_dim_text) if specs_dim_text else {"width": None, "length": None, "height": None}
-    width = detail_dims.get("width") or specs_dims.get("width")
-    length = detail_dims.get("length") or specs_dims.get("length")
-    height = detail_dims.get("height") or specs_dims.get("height")
+    width = _parse_mm_cell(row_data.get('width')) or detail_dims.get("width") or specs_dims.get("width")
+    length = _parse_mm_cell(row_data.get('length')) or detail_dims.get("length") or specs_dims.get("length")
+    height = _parse_mm_cell(row_data.get('height')) or detail_dims.get("height") or specs_dims.get("height")
 
     qty = _parse_qty(row_data.get('qty'))
     rrp = _parse_numeric_price(row_data.get('cost'))
@@ -691,7 +755,7 @@ def extract_product_fields(
     product_details = ' | '.join(details_parts) if details_parts else None
 
     return Product(
-        doc_code=_coerce_nonempty_str(row_data.get('doc_code')),
+        doc_code=doc_code,
         product_name=product_name,
         brand=brand,
         colour=colour,
