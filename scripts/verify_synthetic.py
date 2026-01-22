@@ -98,7 +98,7 @@ def main():
         print("Synthetic data directory not found. Generating...")
         import subprocess
         result = subprocess.run(
-            ['python', 'tools/generate_programa_test_schedules.py',
+            [sys.executable, 'tools/generate_programa_test_schedules.py',
              '--mode', 'both',
              '--samples_dir', './data',
              '--output_dir', './synthetic_out',

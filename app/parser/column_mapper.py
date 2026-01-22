@@ -31,7 +31,6 @@ COLUMN_SYNONYMS: dict[str, list[str]] = {
         'id',
         'item ref',
         'product ref',
-        'spec',
         'item no',
         'item number',
         'product no',
