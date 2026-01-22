@@ -15,6 +15,9 @@ from openpyxl.utils.exceptions import InvalidFileException
 if TYPE_CHECKING:
     pass
 
+import re
+from openpyxl.cell.cell import Cell
+
 
 class WorkbookLoadError(Exception):
     """Exception raised when a workbook cannot be loaded.
@@ -159,3 +162,331 @@ def load_workbook_safe(file_bytes: bytes) -> Workbook:
             message="Failed to load workbook",
             detail=f"Unexpected error ({error_type}): {str(e)}"
         ) from e
+
+
+# Patterns that indicate a cell is NOT a schedule title (metadata labels)
+METADATA_LABELS = frozenset({
+    'job no.', 'job no', 'job name.', 'job name', 'revision date', 'revision no.',
+    'revision no', 'revision', 'date', 'client name:', 'client name', 'project address:',
+    'project address', 'version:', 'version', 'issue date:', 'issue date',
+    'project:', 'project', 'rev', 'rev.', 'notes', 'legend'
+})
+
+# Pattern to detect formula references (e.g., ='[1]Cover Sheet'!A6)
+FORMULA_PATTERN = re.compile(
+    r"^=\s*'?\[?\d*\]?([^'!]+)'?!([A-Z]+)(\d+)$",
+    re.IGNORECASE
+)
+
+# Pattern to detect Cover Sheet formula specifically
+COVER_SHEET_FORMULA_PATTERN = re.compile(
+    r"^=\s*'?\[?\d*\]?Cover\s*Sheet'?!([A-Z]+)(\d+)$",
+    re.IGNORECASE
+)
+
+
+def _get_cell_string_value(cell: Cell) -> str | None:
+    """Extract string value from a cell, handling various types.
+    
+    Args:
+        cell: openpyxl Cell object
+        
+    Returns:
+        String value or None if cell is empty or non-string
+    """
+    value = cell.value
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    # Convert numbers to string (but these are unlikely to be titles)
+    return str(value).strip()
+
+
+def _is_metadata_label(text: str) -> bool:
+    """Check if text appears to be a metadata label rather than a title.
+    
+    Args:
+        text: Cell text to check
+        
+    Returns:
+        True if text looks like a metadata label
+    """
+    if not text:
+        return True
+    
+    normalized = text.lower().strip()
+    
+    # Empty after stripping whitespace
+    if not normalized:
+        return True
+    
+    # Check against known metadata labels
+    if normalized in METADATA_LABELS:
+        return True
+    
+    # Check if it ends with common label suffixes
+    if normalized.endswith(':') and len(normalized) < 30:
+        return True
+    
+    # "SCHEDULE NAME" is a label, not a title
+    if normalized == 'schedule name':
+        return True
+    
+    return False
+
+
+def _is_likely_title(text: str) -> bool:
+    """Check if text appears to be a schedule title.
+    
+    A title typically:
+    - Is longer than a few characters
+    - Contains alphanumeric content
+    - Is not a metadata label
+    - May contain project codes, names, or "schedule" keyword
+    
+    Args:
+        text: Cell text to check
+        
+    Returns:
+        True if text looks like a schedule title
+    """
+    if not text or len(text) < 3:
+        return False
+    
+    if _is_metadata_label(text):
+        return False
+    
+    # Check for formula (starts with =)
+    if text.startswith('='):
+        return False
+    
+    # Check for error values
+    if text.startswith('#') and text.endswith('!'):
+        return False
+    
+    # Titles often contain these patterns
+    text_lower = text.lower()
+    title_indicators = ['schedule', 'project', 'interior', 'finish', 'ff&e', 'ffe']
+    
+    # If it contains a title indicator, it's likely a title
+    if any(indicator in text_lower for indicator in title_indicators):
+        return True
+    
+    # If it contains a colon followed by text (like "12006: GEM, WATERLINE PLACE")
+    if ':' in text and len(text) > 10:
+        parts = text.split(':', 1)
+        if len(parts) == 2 and len(parts[1].strip()) > 3:
+            return True
+    
+    # If it's reasonably long and not a label, consider it a title
+    if len(text) > 15 and not text.endswith(':'):
+        return True
+    
+    return False
+
+
+def _resolve_cover_sheet_formula(wb: Workbook, formula: str) -> str | None:
+    """Attempt to resolve a formula reference to Cover Sheet.
+    
+    Args:
+        wb: Workbook object
+        formula: Formula string (e.g., "='[1]Cover Sheet'!A6")
+        
+    Returns:
+        Resolved cell value or None if cannot resolve
+    """
+    match = COVER_SHEET_FORMULA_PATTERN.match(formula)
+    if not match:
+        # Try generic formula pattern
+        match = FORMULA_PATTERN.match(formula)
+        if not match:
+            return None
+        sheet_name = match.group(1).strip()
+    else:
+        sheet_name = 'Cover Sheet'
+    
+    col_letter = match.group(1) if COVER_SHEET_FORMULA_PATTERN.match(formula) else match.group(2)
+    row_num = int(match.group(2) if COVER_SHEET_FORMULA_PATTERN.match(formula) else match.group(3))
+    
+    # Find the Cover Sheet (case-insensitive, handle trailing spaces)
+    cover_sheet = None
+    for ws_name in wb.sheetnames:
+        if ws_name.strip().lower() == sheet_name.lower():
+            cover_sheet = wb[ws_name]
+            break
+    
+    if cover_sheet is None:
+        return None
+    
+    # Get the referenced cell value
+    try:
+        cell = cover_sheet[f"{col_letter}{row_num}"]
+        value = _get_cell_string_value(cell)
+        if value and _is_likely_title(value):
+            return value
+    except (KeyError, ValueError):
+        pass
+    
+    return None
+
+
+def _find_schedule_name_in_cover_sheet(wb: Workbook) -> str | None:
+    """Search for schedule name in a Cover Sheet.
+    
+    Looks for patterns like:
+    - Row with "SCHEDULE NAME" label and value in adjacent cell
+    - Title in A6 (common location)
+    - PROJECT: prefix rows
+    
+    Args:
+        wb: Workbook object
+        
+    Returns:
+        Schedule name or None if not found
+    """
+    # Find Cover Sheet
+    cover_sheet = None
+    for ws_name in wb.sheetnames:
+        if 'cover' in ws_name.strip().lower():
+            cover_sheet = wb[ws_name]
+            break
+    
+    if cover_sheet is None:
+        return None
+    
+    # Scan first 10 rows for schedule name patterns
+    for row_idx in range(1, 11):
+        # Check for "SCHEDULE NAME" label pattern
+        cell_a = cover_sheet.cell(row=row_idx, column=1)
+        val_a = _get_cell_string_value(cell_a)
+        
+        if val_a:
+            val_a_lower = val_a.lower().strip()
+            
+            # Pattern: "SCHEDULE NAME" in A, actual name in B
+            if 'schedule name' in val_a_lower or val_a_lower == 'schedule':
+                cell_b = cover_sheet.cell(row=row_idx, column=2)
+                val_b = _get_cell_string_value(cell_b)
+                if val_b and len(val_b) > 2:
+                    return val_b
+            
+            # Pattern: Title directly in A (like "SCHEDULE 003- INTERNAL FINISHES")
+            if _is_likely_title(val_a):
+                return val_a
+    
+    # Check A6 specifically (common location in sample2)
+    try:
+        cell_a6 = cover_sheet.cell(row=6, column=1)
+        val_a6 = _get_cell_string_value(cell_a6)
+        if val_a6 and _is_likely_title(val_a6):
+            return val_a6
+    except (KeyError, ValueError):
+        pass
+    
+    return None
+
+
+def get_schedule_name(wb: Workbook, filename: str) -> str:
+    """Extract the schedule name from a workbook.
+    
+    This function attempts to find the schedule name using multiple strategies:
+    1. Check rows 1-3 of the first sheet for title text
+    2. Handle formula references (e.g., ='[1]Cover Sheet'!A6)
+    3. Search Cover Sheet for schedule name patterns
+    4. Fallback to filename without extension
+    
+    Args:
+        wb: Loaded openpyxl Workbook object
+        filename: Original filename (used as fallback)
+        
+    Returns:
+        Schedule name string (never empty)
+        
+    Example:
+        >>> wb = load_workbook_safe(file_bytes)
+        >>> name = get_schedule_name(wb, "schedule_sample1.xlsx")
+        >>> print(name)
+        '12006: GEM, WATERLINE PLACE, WILLIAMSTOWN'
+    """
+    if not wb.sheetnames:
+        # Empty workbook, use filename
+        return _filename_to_schedule_name(filename)
+    
+    # Get the first sheet (or active sheet)
+    first_sheet = wb.active or wb[wb.sheetnames[0]]
+    
+    # Strategy 1: Check rows 1-10 of first sheet for title text
+    for row_idx in range(1, 11):
+        # Check column A first
+        cell_a = first_sheet.cell(row=row_idx, column=1)
+        val_a = _get_cell_string_value(cell_a)
+        
+        if val_a:
+            # Check if it's a formula reference
+            if val_a.startswith('='):
+                # Try to resolve formula
+                resolved = _resolve_cover_sheet_formula(wb, val_a)
+                if resolved:
+                    return resolved
+                # If formula can't be resolved, continue searching
+                continue
+            
+            # Check if it's a likely title
+            if _is_likely_title(val_a):
+                return val_a
+            
+            # Check for "SCHEDULE NAME" label pattern
+            val_a_lower = val_a.lower().strip()
+            if 'schedule name' in val_a_lower or val_a_lower == 'schedule':
+                cell_b = first_sheet.cell(row=row_idx, column=2)
+                val_b = _get_cell_string_value(cell_b)
+                if val_b and len(val_b) > 2:
+                    return val_b
+        
+        # Also check column B for titles (some formats put title there)
+        cell_b = first_sheet.cell(row=row_idx, column=2)
+        val_b = _get_cell_string_value(cell_b)
+        if val_b and _is_likely_title(val_b):
+            # Make sure column A isn't a label
+            if not val_a or not _is_metadata_label(val_a):
+                return val_b
+    
+    # Strategy 2: Search Cover Sheet if present
+    cover_name = _find_schedule_name_in_cover_sheet(wb)
+    if cover_name:
+        return cover_name
+    
+    # Strategy 3: Fallback to filename
+    return _filename_to_schedule_name(filename)
+
+
+def _filename_to_schedule_name(filename: str) -> str:
+    """Convert filename to a schedule name.
+    
+    Removes file extension and cleans up the name.
+    
+    Args:
+        filename: Original filename
+        
+    Returns:
+        Cleaned schedule name
+    """
+    if not filename:
+        return "Unknown Schedule"
+    
+    # Remove common extensions
+    name = filename
+    for ext in ['.xlsx', '.xls', '.XLSX', '.XLS']:
+        if name.endswith(ext):
+            name = name[:-len(ext)]
+            break
+    
+    # Clean up underscores and extra spaces
+    name = name.replace('_', ' ').strip()
+    
+    # If empty after cleaning, return default
+    if not name:
+        return "Unknown Schedule"
+    
+    return name
