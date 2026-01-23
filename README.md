@@ -23,7 +23,7 @@ A Python REST API that parses interior designer Excel schedules (.xlsx) into str
 
 ```bash
 # Clone and navigate to project
-git clone <repository-url>
+git clone https://github.com/nikjohn7/design-specs-parser.git
 cd design-specs-parser
 
 # Create virtual environment and install dependencies
@@ -60,6 +60,23 @@ Interactive API documentation is available at:
 |--------|----------|-------------|
 | POST | `/parse` | Parse an Excel schedule into JSON |
 | GET | `/health` | Health check |
+
+### Status Codes & Errors
+
+| Status | Meaning | Response body |
+|--------|---------|---------------|
+| 200 | Successfully parsed schedule | `ParseResponse` |
+| 400 | Invalid upload or workbook could not be parsed | `ErrorResponse` |
+| 422 | Request validation error (e.g., missing `file` form field) | `ErrorResponse` |
+
+**Example error response (422):**
+
+```json
+{
+  "error": "Validation error",
+  "detail": "Missing required form field: file"
+}
+```
 
 ### Example Request/Response
 
@@ -113,6 +130,13 @@ curl -X POST -F "file=@data/schedule_sample1.xlsx" http://localhost:8000/parse
 | `feature_image` | string | Image filename (optional) |
 | `product_description` | string | Short description |
 | `product_details` | string | Additional specifications |
+
+## Operational Notes
+
+- Parsing is synchronous: the request returns only after the workbook is fully parsed.
+- Uploads are read into memory (`UploadFile.read()`), and workbooks are loaded in-memory via `openpyxl`.
+- No explicit max upload size is configured in the app; practical limits depend on the server/proxy and available memory/CPU.
+- Included sample files range from ~1.4MB to ~47MB (`data/`).
 
 ## Architecture
 

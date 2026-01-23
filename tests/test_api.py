@@ -137,3 +137,12 @@ def test_parse_rejects_invalid_xlsx_bytes(client: TestClient) -> None:
     assert isinstance(data.get("error"), str)
     # Error message may vary depending on which validation triggers first.
     assert data["error"] in {"Invalid file", "Invalid file format", "Invalid Excel file", "Failed to load workbook"}
+
+
+def test_parse_missing_file_returns_422(client: TestClient) -> None:
+    response = client.post("/parse")
+    assert response.status_code == 422
+
+    data = response.json()
+    assert data.get("error") == "Validation error"
+    assert data.get("detail") == "Missing required form field: file"
