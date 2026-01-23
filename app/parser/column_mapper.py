@@ -470,11 +470,11 @@ def map_columns(
         for header in normalized_headers.values()
     )
 
-    # Pre-scan to check if any header explicitly matches product_name.
-    # This prevents the DESCRIPTION heuristic from overriding an explicit product_name
-    # header that may appear later in the scan order.
+    # Pre-scan to check if any header matches product_name (using the same fuzzy
+    # setting as the main scan). This prevents the DESCRIPTION heuristic from
+    # overriding a product_name header that may appear later in the scan order.
     has_explicit_product_name = any(
-        _match_column(header, use_fuzzy=False)[0] == "product_name"
+        _match_column(header, use_fuzzy=use_fuzzy)[0] == "product_name"
         for header in normalized_headers.values()
     )
 
