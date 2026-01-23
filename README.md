@@ -331,7 +331,7 @@ pytest --cov=app --cov-report=term-missing
 - **Integration tests**: Full API endpoint testing with sample files
 - **Synthetic tests**: Robustness testing with generated and mutated schedules
 
-### Generating Synthetic Test Data
+### Synthetic Test Generator
 
 ```bash
 python tools/generate_programa_test_schedules.py \
@@ -341,6 +341,13 @@ python tools/generate_programa_test_schedules.py \
   --num_generated 20 \
   --seed 12345
 ```
+
+The provided sample files served as baselines for understanding real-world schedule formats. To ensure the parser handles edge cases robustly, I built a generator that creates varied workbooks with challenges like header row shifts, merged cells, hidden columns, formula references, and diverse delimiter styles.
+
+**Modes:**
+- `generate` — Create new synthetic schedules with ground truth JSON
+- `mutate` — Apply mutations to existing samples (no ground truth, metadata only)
+- `both` — Run both generation and mutation
 
 ## Project Structure
 
