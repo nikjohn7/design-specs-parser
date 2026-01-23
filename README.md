@@ -229,13 +229,11 @@ flowchart LR
   Workers -.-> Obs
 ```
 
-**Key production considerations:**
+**Production notes:**
 
-- **Stateless API**: Horizontally scalable behind HTTPS endpoint with auth and rate limiting
-- **Sync-first design**: `POST /parse` returns results directly; suitable for most file sizes
-- **Optional async mode**: Large files can be queued for background processing (dashed paths)
-- **Observability**: Centralized logs, metrics, and alerts for API and workers
-- **Container-ready**: Docker HEALTHCHECK + non-root user for orchestrator compatibility
+- **Memory-bound**: Files load entirely into memory (openpyxl). The 47MB sample works fine, but very large files would need architectural changes.
+- **Partial over failure**: Unparseable fields return `null` rather than failing the request. Track null-field rates if data quality matters.
+- **Async candidates**: Batch uploads, or if image extraction is added later (embedded images are slow to decode).
 
 ## Design Decisions
 
