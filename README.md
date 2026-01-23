@@ -11,6 +11,7 @@ A Python REST API that parses interior designer Excel schedules (.xlsx) into str
 - [Known Limitations](#known-limitations)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
+- [Development Process](#development-process)
 
 ## Quick Start
 
@@ -366,6 +367,30 @@ python tools/generate_programa_test_schedules.py \
 ├── requirements.txt
 └── README.md
 ```
+
+## Development Process
+
+### Time Investment
+
+Total time: approximately **10.5–11 hours** over several days.
+
+| Phase | Time | Activities |
+|-------|------|------------|
+| Planning | ~1.5 hours | Requirements analysis, architecture planning, writing CLAUDE.md, structuring tasks |
+| Implementation | ~7 hours | Core parsing pipeline, API endpoints, handling edge cases |
+| Testing & Polish | ~2 hours | Unit/integration tests, synthetic test generator, documentation |
+
+### AI Assistance
+
+AI tools were used to augment (not replace) development in the following areas:
+
+- **Planning documentation**: After manual planning, AI helped structure notes into CLAUDE.md and task breakdowns
+- **Code development**: AI acted as a pair programmer, augmenting implementation and debugging based on my documented task instructions and planning
+- **Commit messages & PRs**: AI assisted with writing clear, conventional commit messages and PR descriptions based on provided context
+- **Code review**: [Cubic](https://cubic.dev) AI code reviewer scanned all PRs, supplementing manual review
+- **Documentation polish**: AI helped refine README sections and ensure consistency
+
+All architectural decisions were made manually.
 
 ## License
 
