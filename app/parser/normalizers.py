@@ -55,8 +55,9 @@ def _parse_number_with_unit(text: str) -> int | None:
     match = _UNIT_PATTERN.match(text)
     if not match:
         # Try to salvage a number+unit from within larger strings.
+        # Use (?!\w) instead of \b to handle inch symbol (") which is non-word char
         inner = re.search(
-            rf'(\d+(?:[.,]\d+)?)\s*({_UNIT_RE})\b',
+            rf'(\d+(?:[.,]\d+)?)\s*({_UNIT_RE})(?!\w)',
             text,
             re.IGNORECASE,
         )

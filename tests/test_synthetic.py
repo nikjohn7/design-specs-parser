@@ -206,24 +206,24 @@ def test_generated_files_quality_against_truth(
                     f"got {parsed_value!r}, expected {truth_value!r} ±{abs_tol}"
                 )
 
-            def compare_rrp_field(*, abs_tol: float = 0.05) -> None:
-                for doc_code in overlapping_codes:
-                    truth_value = truth_by_code[doc_code].get("rrp")
-                    if truth_value is None:
-                        continue
-                    parsed_value = parsed_by_code[doc_code].get("rrp")
-                    if parsed_value is None:
-                        continue
-                    truth_num = float(truth_value)
-                    parsed_num = float(parsed_value)
-                    allowed = max(abs_tol, truth_num * 0.20)
-                    assert abs(parsed_num - truth_num) <= allowed, (
-                        f"{xlsx_path.name}: rrp mismatch for {doc_code}: got {parsed_value!r}, expected {truth_value!r} "
-                        f"(±{allowed:.2f})"
-                    )
+        def compare_rrp_field(*, abs_tol: float = 0.05) -> None:
+            for doc_code in overlapping_codes:
+                truth_value = truth_by_code[doc_code].get("rrp")
+                if truth_value is None:
+                    continue
+                parsed_value = parsed_by_code[doc_code].get("rrp")
+                if parsed_value is None:
+                    continue
+                truth_num = float(truth_value)
+                parsed_num = float(parsed_value)
+                allowed = max(abs_tol, truth_num * 0.20)
+                assert abs(parsed_num - truth_num) <= allowed, (
+                    f"{xlsx_path.name}: rrp mismatch for {doc_code}: got {parsed_value!r}, expected {truth_value!r} "
+                    f"(±{allowed:.2f})"
+                )
 
-            compare_int_field("qty", abs_tol=0)
-            compare_int_field("width", abs_tol=2)
-            compare_int_field("length", abs_tol=2)
-            compare_int_field("height", abs_tol=2)
-            compare_rrp_field(abs_tol=0.50)
+        compare_int_field("qty", abs_tol=0)
+        compare_int_field("width", abs_tol=2)
+        compare_int_field("length", abs_tol=2)
+        compare_int_field("height", abs_tol=2)
+        compare_rrp_field(abs_tol=0.50)
