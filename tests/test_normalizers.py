@@ -5,8 +5,17 @@ class TestParseDimensions:
     def test_none_input(self):
         assert parse_dimensions(None) == {"width": None, "length": None, "height": None}
 
+    def test_explicit_width_mm_no_conversion(self):
+        dims = parse_dimensions("WIDTH: 600 MM")
+        assert dims["width"] == 600
+        assert dims["length"] is None
+        assert dims["height"] is None
+
     def test_explicit_width_metres(self):
         assert parse_dimensions("WIDTH: 3.66 METRES")["width"] == 3660
+
+    def test_explicit_width_m_unit(self):
+        assert parse_dimensions("WIDTH: 3.66 m")["width"] == 3660
 
     def test_wxh_labeled_mm(self):
         dims = parse_dimensions("600 W X 600 H MM")
@@ -22,6 +31,12 @@ class TestParseDimensions:
         dims = parse_dimensions("SHEET SIZE MAX: 5500 X 2800 MM")
         assert dims["width"] == 5500
         assert dims["length"] == 2800
+
+    def test_parenthesized_labels(self):
+        dims = parse_dimensions("1200 (W) x 800 (D) x 330 (H) mm")
+        assert dims["width"] == 1200
+        assert dims["length"] == 800
+        assert dims["height"] == 330
 
     def test_thickness_maps_to_height(self):
         dims = parse_dimensions("THICKNESS: 10MM")
