@@ -8,8 +8,10 @@ from __future__ import annotations
 import re
 
 
+_UNIT_RE = r'(?:mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?|in|inch(?:es)?|")'
+
 _UNIT_PATTERN = re.compile(
-    r'^(?P<num>\d+(?:[.,]\d+)?)\s*(?P<unit>mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?)?$',
+    rf'^(?P<num>\d+(?:[.,]\d+)?)\s*(?P<unit>{_UNIT_RE})?$',
     re.IGNORECASE,
 )
 
@@ -34,6 +36,8 @@ def _to_mm(value: str, unit: str | None) -> int | None:
         return int(round(number * 10))
     if unit_norm in {"m", "meter", "meters", "metre", "metres"}:
         return int(round(number * 1000))
+    if unit_norm in {"in", "inch", "inches", '"'}:
+        return int(round(number * 25.4))
 
     return None
 
@@ -43,8 +47,8 @@ def _parse_number_with_unit(text: str) -> int | None:
     if not text:
         return None
 
-    # Handle glued forms like "10MM"
-    glued = re.match(r'^(\d+(?:[.,]\d+)?)(mm|cm|m)$', text, re.IGNORECASE)
+    # Handle glued forms like "10MM" or `3.9"`
+    glued = re.match(r'^(\d+(?:[.,]\d+)?)(mm|cm|m|"|in)$', text, re.IGNORECASE)
     if glued:
         return _to_mm(glued.group(1), glued.group(2))
 
@@ -52,7 +56,7 @@ def _parse_number_with_unit(text: str) -> int | None:
     if not match:
         # Try to salvage a number+unit from within larger strings.
         inner = re.search(
-            r'(\d+(?:[.,]\d+)?)\s*(mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?)\b',
+            rf'(\d+(?:[.,]\d+)?)\s*({_UNIT_RE})\b',
             text,
             re.IGNORECASE,
         )
@@ -64,6 +68,16 @@ def _parse_number_with_unit(text: str) -> int | None:
         return None
 
     return _to_mm(match.group("num"), match.group("unit"))
+
+
+def parse_mm_value(text: str | None) -> int | None:
+    """Parse a single numeric value with an optional unit into mm.
+
+    Supports mm/cm/m as well as inch values (e.g., `3.9"`).
+    """
+    if not text:
+        return None
+    return _parse_number_with_unit(str(text))
 
 
 def parse_dimensions(text: str | None) -> dict[str, int | None]:
@@ -97,7 +111,7 @@ def parse_dimensions(text: str | None) -> dict[str, int | None]:
     explicit: dict[str, int | None] = {}
     for key in ("WIDTH", "LENGTH", "HEIGHT", "DEPTH", "THICKNESS"):
         match = re.search(
-            rf'\b{key}\b\s*[:=\-]?\s*([0-9]+(?:[.,][0-9]+)?\s*(?:mm|millimet(?:er|re)s?|cm|centimet(?:er|re)s?|m|met(?:er|re)s?)?)',
+            rf'\b{key}\b\s*[:=\-]?\s*([0-9]+(?:[.,][0-9]+)?\s*(?:{_UNIT_RE})?)',
             normalized,
             re.IGNORECASE,
         )

@@ -184,6 +184,15 @@ COVER_SHEET_FORMULA_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+_TRAILING_QUALIFIER_PATTERN = re.compile(r"\s*\((?:ff&e|ffe)\s*tracker\)\s*$", re.IGNORECASE)
+
+
+def _clean_schedule_name(text: str) -> str:
+    """Normalize schedule name strings extracted from workbook cells."""
+    cleaned = str(text).strip()
+    cleaned = _TRAILING_QUALIFIER_PATTERN.sub("", cleaned).strip()
+    return cleaned
+
 
 def _get_cell_string_value(cell: Cell) -> str | None:
     """Extract string value from a cell, handling various types.
@@ -268,10 +277,34 @@ def _is_likely_title(text: str) -> bool:
     # Titles often contain these patterns
     text_lower = text.lower()
     title_indicators = ['schedule', 'project', 'interior', 'finish', 'ff&e', 'ffe']
-    
+
     # If it contains a title indicator, it's likely a title
     if any(indicator in text_lower for indicator in title_indicators):
         return True
+
+    # Disclaimers and instruction blocks are not titles (common above headers).
+    if "\n" in text:
+        return False
+    disclaimer_indicators = [
+        "refer to drawings",
+        "refer to plans",
+        "for full detail",
+        "images and costs",
+        "verify on site",
+        "prior to order",
+        "indicative only",
+        "all dimensions",
+    ]
+    if any(indicator in text_lower for indicator in disclaimer_indicators):
+        return False
+
+    # Avoid mistaking column headers (e.g., "Indicative Image") for titles.
+    # If it's a short phrase with no title indicators, no digits, and no colon,
+    # treat it as a header/label rather than a schedule name.
+    if ":" not in text and not re.search(r"\d", text):
+        words = re.findall(r"[A-Za-z&]+", text)
+        if 1 <= len(words) <= 3 and len(text) <= 28:
+            return False
     
     # If it contains a colon followed by text (like "12006: GEM, WATERLINE PLACE")
     if ':' in text and len(text) > 10:
@@ -324,7 +357,7 @@ def _resolve_cover_sheet_formula(wb: Workbook, formula: str) -> str | None:
         cell = cover_sheet[f"{col_letter}{row_num}"]
         value = _get_cell_string_value(cell)
         if value and _is_likely_title(value):
-            return value
+            return _clean_schedule_name(value)
     except (KeyError, ValueError):
         pass
     
@@ -369,18 +402,18 @@ def _find_schedule_name_in_cover_sheet(wb: Workbook) -> str | None:
                 cell_b = cover_sheet.cell(row=row_idx, column=2)
                 val_b = _get_cell_string_value(cell_b)
                 if val_b and len(val_b) > 2:
-                    return val_b
+                    return _clean_schedule_name(val_b)
             
             # Pattern: Title directly in A (like "SCHEDULE 003- INTERNAL FINISHES")
-            if _is_likely_title(val_a):
-                return val_a
+            if _is_likely_title(val_a) and not val_a_lower.startswith("project:"):
+                return _clean_schedule_name(val_a)
     
     # Check A6 specifically (common location in sample2)
     try:
         cell_a6 = cover_sheet.cell(row=6, column=1)
         val_a6 = _get_cell_string_value(cell_a6)
         if val_a6 and _is_likely_title(val_a6):
-            return val_a6
+            return _clean_schedule_name(val_a6)
     except (KeyError, ValueError):
         pass
     
@@ -417,6 +450,7 @@ def get_schedule_name(wb: Workbook, filename: str) -> str:
     first_sheet = wb.active or wb[wb.sheetnames[0]]
     
     # Strategy 1: Check rows 1-10 of first sheet for title text
+    project_title_candidate: str | None = None
     for row_idx in range(1, 11):
         # Check column A first
         cell_a = first_sheet.cell(row=row_idx, column=1)
@@ -428,13 +462,18 @@ def get_schedule_name(wb: Workbook, filename: str) -> str:
                 # Try to resolve formula
                 resolved = _resolve_cover_sheet_formula(wb, val_a)
                 if resolved:
-                    return resolved
+                    return _clean_schedule_name(resolved)
                 # If formula can't be resolved, continue searching
                 continue
             
             # Check if it's a likely title
             if _is_likely_title(val_a):
-                return val_a
+                # Many workbooks (including synthetic ones) put a "PROJECT:" line above
+                # a separate "SCHEDULE NAME" field. Prefer the schedule name field if present.
+                if val_a.lower().lstrip().startswith("project:"):
+                    project_title_candidate = project_title_candidate or val_a
+                    continue
+                return _clean_schedule_name(val_a)
             
             # Check for "SCHEDULE NAME" label pattern
             val_a_lower = val_a.lower().strip()
@@ -442,7 +481,7 @@ def get_schedule_name(wb: Workbook, filename: str) -> str:
                 cell_b = first_sheet.cell(row=row_idx, column=2)
                 val_b = _get_cell_string_value(cell_b)
                 if val_b and len(val_b) > 2:
-                    return val_b
+                    return _clean_schedule_name(val_b)
         
         # Also check column B for titles (some formats put title there)
         cell_b = first_sheet.cell(row=row_idx, column=2)
@@ -450,12 +489,15 @@ def get_schedule_name(wb: Workbook, filename: str) -> str:
         if val_b and _is_likely_title(val_b):
             # Make sure column A isn't a label
             if not val_a or not _is_metadata_label(val_a):
-                return val_b
+                return _clean_schedule_name(val_b)
+
+    if project_title_candidate:
+        return _clean_schedule_name(project_title_candidate)
     
     # Strategy 2: Search Cover Sheet if present
     cover_name = _find_schedule_name_in_cover_sheet(wb)
     if cover_name:
-        return cover_name
+        return _clean_schedule_name(cover_name)
     
     # Strategy 3: Fallback to filename
     return _filename_to_schedule_name(filename)

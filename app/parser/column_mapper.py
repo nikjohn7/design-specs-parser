@@ -449,27 +449,41 @@ def map_columns(
         {'doc_code': 1, 'image': 2, 'item_location': 3, 'specs': 4, ...}
     """
     columns: dict[str, int] = {}
-    
+
     # Determine actual column range to scan
     actual_max = min(max_cols, ws.max_column or 1)
-    
+
+    normalized_headers: dict[int, str] = {}
     for col in range(1, actual_max + 1):
-        cell = ws.cell(row=header_row, column=col)
-        value = cell.value
-        
+        value = ws.cell(row=header_row, column=col).value
         if value is None:
             continue
-        
         normalized = _normalize_header(value)
+        if normalized:
+            normalized_headers[col] = normalized
+
+    # Heuristic: "DESCRIPTION" is ambiguous in the wild and in synthetic schedules.
+    # If we already have a dedicated room/location column, then DESCRIPTION tends to
+    # be the product name/description field rather than the location field.
+    has_room_or_location = any(
+        header in {"room", "location", "item & location", "item and location", "item/location"}
+        for header in normalized_headers.values()
+    )
+
+    for col in range(1, actual_max + 1):
+        normalized = normalized_headers.get(col)
         if not normalized:
             continue
-        
-        canonical, match_type = _match_column(normalized, use_fuzzy=use_fuzzy)
-        
+
+        if normalized == "description" and has_room_or_location and "product_name" not in columns:
+            columns["product_name"] = col
+            continue
+
+        canonical, _match_type = _match_column(normalized, use_fuzzy=use_fuzzy)
         if canonical and canonical not in columns:
             # Only store first occurrence of each canonical name
             columns[canonical] = col
-    
+
     return columns
 
 
