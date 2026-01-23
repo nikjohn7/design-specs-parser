@@ -63,6 +63,10 @@ async def health_check() -> dict:
             "description": "Invalid file format or parsing error",
             "model": ErrorResponse,
         },
+        422: {
+            "description": "Request validation error (e.g., missing required form field)",
+            "model": ErrorResponse,
+        },
     }
 )
 async def parse_schedule(

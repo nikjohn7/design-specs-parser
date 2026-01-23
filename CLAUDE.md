@@ -96,7 +96,7 @@ Check `.claude/` for available skills and hooks before starting tasks:
 - [x] Phase 3: Row extraction + field parsing
 - [x] Phase 4: Orchestration + de-dup
 - [x] Phase 5: Testing
-- [ ] Phase 6: Polish (Docker, README, diagram)
+- [x] Phase 6: Polish (Docker, README, diagram)
 
 ## Sample Data Quick Facts
 

@@ -4,10 +4,13 @@ This module creates and configures the FastAPI application instance,
 sets up CORS middleware, and includes the API routes.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import router
+from app.core.models import ErrorResponse
 
 
 def create_app() -> FastAPI:
@@ -36,6 +39,30 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_exception_handler(  # type: ignore[misc]
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        missing_fields: list[str] = []
+        for err in exc.errors():
+            if err.get("type") == "missing":
+                loc = err.get("loc") or ()
+                if loc:
+                    missing_fields.append(str(loc[-1]))
+
+        detail = "Request body validation failed"
+        if "file" in missing_fields:
+            detail = "Missing required form field: file"
+
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="Validation error",
+                detail=detail,
+            ).model_dump(),
+        )
 
     # Include API routes
     app.include_router(router)
