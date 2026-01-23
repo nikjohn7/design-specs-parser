@@ -11,6 +11,7 @@ A Python REST API that parses interior designer Excel schedules (.xlsx) into str
 - [Known Limitations](#known-limitations)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
+- [Development Process](#development-process)
 
 ## Quick Start
 
@@ -267,7 +268,7 @@ The parser uses deterministic rules and pattern matching rather than ML models:
 
 ### 3. All Fields Optional
 
-Every output field defaults to `null`. This enables graceful degradation—missing data in the input produces partial output rather than validation errors.
+Every output field defaults to `null`. When data is missing from the input, the parser returns partial output rather than failing with validation errors.
 
 ### 4. Fuzzy Header Matching
 
@@ -295,7 +296,7 @@ The parser handles three layout patterns:
 
 1. **No image extraction**: Embedded images are not currently extracted. The `feature_image` field is reserved for future implementation.
 
-2. **External workbook references**: Formula references like `='[1]Cover Sheet'!A6` cannot be resolved by openpyxl. The parser falls back to reading the target cell directly or using the filename.
+2. **External workbook references**: Formulas referencing other workbook files (e.g., `='[1]Cover Sheet'!A6`) cannot be resolved by openpyxl. The parser falls back to reading the target cell directly or using the filename. Formulas within the same workbook are resolved correctly.
 
 3. **Ambiguous dimensions**: When a specification contains only `SIZE: 5500 X 2800 MM` without W/L/H indicators, the parser assigns width and length but cannot determine orientation.
 
@@ -330,7 +331,7 @@ pytest --cov=app --cov-report=term-missing
 - **Integration tests**: Full API endpoint testing with sample files
 - **Synthetic tests**: Robustness testing with generated and mutated schedules
 
-### Generating Synthetic Test Data
+### Synthetic Test Generator
 
 ```bash
 python tools/generate_programa_test_schedules.py \
@@ -340,6 +341,13 @@ python tools/generate_programa_test_schedules.py \
   --num_generated 20 \
   --seed 12345
 ```
+
+The provided sample files served as baselines for understanding real-world schedule formats. To ensure the parser handles edge cases robustly, I built a generator that creates varied workbooks with challenges like header row shifts, merged cells, hidden columns, formula references, and diverse delimiter styles.
+
+**Modes:**
+- `generate` — Create new synthetic schedules with ground truth JSON
+- `mutate` — Apply mutations to existing samples (no ground truth, metadata only)
+- `both` — Run both generation and mutation
 
 ## Project Structure
 
@@ -366,6 +374,30 @@ python tools/generate_programa_test_schedules.py \
 ├── requirements.txt
 └── README.md
 ```
+
+## Development Process
+
+### Time Investment
+
+Total time: approximately **10.5–11 hours** over several days.
+
+| Phase | Time | Activities |
+|-------|------|------------|
+| Planning | ~1.5 hours | Requirements analysis, architecture planning, writing CLAUDE.md, structuring tasks |
+| Implementation | ~7 hours | Core parsing pipeline, API endpoints, handling edge cases |
+| Testing & Polish | ~2 hours | Unit/integration tests, synthetic test generator, documentation |
+
+### AI Assistance
+
+AI tools were used to augment (not replace) development in the following areas:
+
+- **Planning documentation**: After manual planning, AI helped structure notes into CLAUDE.md and task breakdowns
+- **Code development**: AI acted as a pair programmer, augmenting implementation and debugging based on my documented task instructions and planning
+- **Commit messages & PRs**: AI assisted with writing clear, conventional commit messages and PR descriptions based on provided context
+- **Code review**: [Cubic](https://cubic.dev) AI code reviewer scanned all PRs, supplementing manual review
+- **Documentation polish**: AI helped refine README sections and ensure consistency
+
+All architectural decisions were made manually.
 
 ## License
 
