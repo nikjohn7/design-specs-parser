@@ -267,7 +267,7 @@ The parser uses deterministic rules and pattern matching rather than ML models:
 
 ### 3. All Fields Optional
 
-Every output field defaults to `null`. This enables graceful degradation—missing data in the input produces partial output rather than validation errors.
+Every output field defaults to `null`. When data is missing from the input, the parser returns partial output rather than failing with validation errors.
 
 ### 4. Fuzzy Header Matching
 
@@ -295,7 +295,7 @@ The parser handles three layout patterns:
 
 1. **No image extraction**: Embedded images are not currently extracted. The `feature_image` field is reserved for future implementation.
 
-2. **External workbook references**: Formula references like `='[1]Cover Sheet'!A6` cannot be resolved by openpyxl. The parser falls back to reading the target cell directly or using the filename.
+2. **External workbook references**: Formulas referencing other workbook files (e.g., `='[1]Cover Sheet'!A6`) cannot be resolved by openpyxl. The parser falls back to reading the target cell directly or using the filename. Formulas within the same workbook are resolved correctly.
 
 3. **Ambiguous dimensions**: When a specification contains only `SIZE: 5500 X 2800 MM` without W/L/H indicators, the parser assigns width and length but cannot determine orientation.
 
