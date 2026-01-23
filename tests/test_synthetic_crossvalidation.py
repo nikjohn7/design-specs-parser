@@ -346,8 +346,9 @@ class TestLayoutFamilies:
             
             # ffe_tracker should have qty populated for some products
             with_qty = sum(1 for p in products if p.get("qty") is not None)
-            # It's okay if qty is 0, just check we extracted something
-            assert len(products) > 0, f"{xlsx_path.name}: ffe_tracker should have products"
+            assert with_qty > 0, (
+                f"{xlsx_path.name}: ffe_tracker layout should have qty populated for some products"
+            )
 
 
 # =============================================================================
