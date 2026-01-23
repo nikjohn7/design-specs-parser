@@ -16,34 +16,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.models import ParseResponse
 from app.parser.workbook import load_workbook_safe
+from tests.synthetic_helpers import post_parse, validate_schema
 
 pytestmark = [pytest.mark.synthetic, pytest.mark.synthetic_generated]
-
-
-def _post_parse(client: TestClient, xlsx_path: Path) -> dict[str, Any]:
-    response = client.post(
-        "/parse",
-        files={
-            "file": (
-                xlsx_path.name,
-                xlsx_path.read_bytes(),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        },
-    )
-    assert response.headers.get("content-type", "").startswith("application/json")
-    assert response.status_code == 200, f"{xlsx_path.name}: {response.text[:400]}"
-    data = response.json()
-    assert isinstance(data, dict), f"{xlsx_path.name}: expected JSON object"
-    return data
-
-
-def _validate_schema(data: dict[str, Any]) -> ParseResponse:
-    if hasattr(ParseResponse, "model_validate"):  # Pydantic v2
-        return ParseResponse.model_validate(data)
-    return ParseResponse.parse_obj(data)  # Pydantic v1
 
 
 def _norm_text(value: str | None) -> str | None:
@@ -103,8 +79,8 @@ def _require_rate(
 
 def test_generated_files_schema_valid(client: TestClient, generated_files: list[tuple[Path, Path]]) -> None:
     for xlsx_path, truth_path in generated_files:
-        data = _post_parse(client, xlsx_path)
-        _validate_schema(data)
+        data = post_parse(client, xlsx_path)
+        validate_schema(data)
 
 
 def test_generated_files_schedule_name_matches_truth(
@@ -143,7 +119,7 @@ def test_generated_files_doc_code_overlap(
         if not truth_codes:
             continue
 
-        data = _post_parse(client, xlsx_path)
+        data = post_parse(client, xlsx_path)
         parsed_codes = {(p.get("doc_code") or "").strip() for p in (data.get("products") or [])}
         parsed_codes.discard("")
 
@@ -163,7 +139,7 @@ def test_generated_files_quality_against_truth(
         if not expected_products:
             continue
 
-        data = _post_parse(client, xlsx_path)
+        data = post_parse(client, xlsx_path)
         parsed_products = data.get("products") or []
 
         expected_count = len(expected_products)
