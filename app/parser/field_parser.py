@@ -66,6 +66,9 @@ KEY_ALIASES: dict[str, str] = {
     'BRAND': 'BRAND',
     'MANUFACTURER': 'MANUFACTURER',
     'SUPPLIER': 'SUPPLIER',
+    'MAKE': 'MAKER',
+    'VENDOR': 'SUPPLIER',
+    'COMPANY': 'SUPPLIER',
 
     # Code aliases
     'CODE': 'CODE',
@@ -236,12 +239,15 @@ def parse_kv_block(text: str | None) -> dict[str, str]:
     lines = text.split('\n')
 
     for line in lines:
-        key, value = _parse_line(line)
+        # Some schedules use pipe-separated KV segments on a single line.
+        segments = re.split(r'\s*\|\s*', line)
+        for segment in segments:
+            key, value = _parse_line(segment)
 
-        if key and value:
-            # Keep first occurrence of each key (don't overwrite)
-            if key not in result:
-                result[key] = value
+            if key and value:
+                # Keep first occurrence of each key (don't overwrite)
+                if key not in result:
+                    result[key] = value
 
     return result
 
@@ -581,7 +587,7 @@ def extract_product_fields(
     - Name: -> product_name
     """
     from app.core.models import Product
-    from app.parser.normalizers import parse_dimensions, parse_price
+    from app.parser.normalizers import parse_dimensions, parse_mm_value, parse_price
 
     kv_specs = kv_specs or {}
     kv_manufacturer = kv_manufacturer or {}
@@ -607,6 +613,9 @@ def extract_product_fields(
         text = _coerce_nonempty_str(value)
         if not text:
             return None
+        parsed = parse_mm_value(text)
+        if parsed is not None:
+            return parsed
         match = re.search(r'(\d+(?:[.,]\d+)?)', text.replace(',', ''))
         if not match:
             return None
@@ -628,8 +637,22 @@ def extract_product_fields(
         get_value(detail_kv, 'NAME')
         or _coerce_nonempty_str(row_data.get('product_name'))
         or _coerce_nonempty_str(row_data.get('item_name'))
-        or get_value(kv_specs, 'PRODUCT', 'NAME', 'RANGE')
+        or get_value(kv_specs, 'PRODUCT', 'NAME', 'ITEM', 'RANGE')
     )
+
+    # Some schedules place product + location in the location/description column
+    # (e.g., "Laminate Benchtop for Bedroom 2"). Use this as a fallback for the
+    # product name and derive a cleaner location for product_description.
+    item_location = _coerce_nonempty_str(row_data.get('item_location'))
+    derived_item_location = item_location
+    if item_location and " for " in item_location.lower():
+        parts = re.split(r"\s+for\s+", item_location, maxsplit=1, flags=re.IGNORECASE)
+        if len(parts) == 2:
+            left, right = parts[0].strip(), parts[1].strip()
+            if left and right:
+                if not product_name:
+                    product_name = left
+                derived_item_location = right
 
     doc_code = _coerce_nonempty_str(row_data.get('doc_code'))
     if not doc_code:
@@ -661,7 +684,7 @@ def extract_product_fields(
     # Brand: grouped Maker overrides, else manufacturer block NAME, else explicit keys.
     brand = (
         get_value(detail_kv, 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
-        or get_value(kv_manufacturer, 'NAME')
+        or get_value(kv_manufacturer, 'NAME', 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
         or (_coerce_nonempty_str(row_data.get('manufacturer')) if not kv_manufacturer else None)
         or get_value(kv_specs, 'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER')
     )
@@ -712,14 +735,14 @@ def extract_product_fields(
 
     product_description = _build_product_description(
         section=_coerce_nonempty_str(row_data.get('section')),
-        item_location=_coerce_nonempty_str(row_data.get('item_location')),
+        item_location=derived_item_location,
     )
 
     # Build product_details from remaining KV pairs.
     used_keys: set[str] = set()
     if product_name:
         # We might have sourced from any of these.
-        used_keys.update({'PRODUCT', 'NAME', 'RANGE'})
+        used_keys.update({'PRODUCT', 'NAME', 'ITEM', 'RANGE'})
     if brand:
         used_keys.update({'MAKER', 'BRAND', 'MANUFACTURER', 'SUPPLIER', 'NAME'})
     if colour:
