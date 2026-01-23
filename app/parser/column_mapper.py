@@ -470,12 +470,25 @@ def map_columns(
         for header in normalized_headers.values()
     )
 
+    # Pre-scan to check if any header explicitly matches product_name.
+    # This prevents the DESCRIPTION heuristic from overriding an explicit product_name
+    # header that may appear later in the scan order.
+    has_explicit_product_name = any(
+        _match_column(header, use_fuzzy=False)[0] == "product_name"
+        for header in normalized_headers.values()
+    )
+
     for col in range(1, actual_max + 1):
         normalized = normalized_headers.get(col)
         if not normalized:
             continue
 
-        if normalized == "description" and has_room_or_location and "product_name" not in columns:
+        # Only apply DESCRIPTION→product_name heuristic if no explicit product_name header exists
+        if (
+            normalized == "description"
+            and has_room_or_location
+            and not has_explicit_product_name
+        ):
             columns["product_name"] = col
             continue
 
