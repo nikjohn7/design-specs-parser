@@ -266,13 +266,13 @@ _NON_NUMERIC_PRICE_PATTERN = re.compile(
 
 # First preference: explicit currency marker like "$25+GST" or "$45.50 PER SQM"
 _DOLLAR_AMOUNT_PATTERN = re.compile(
-    r'\$\s*(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)',
+    r'\$\s*(?P<num>\d+(?:,\d{3})*(?:\.\d+)?)',
     re.IGNORECASE,
 )
 
 # Fallback: amount near a price context word (RRP/PRICE/COST) when "$" is absent.
 _CONTEXT_AMOUNT_PATTERN = re.compile(
-    r'\b(?:rrp|price|cost|unit\s*cost|rate)\b[^\d$]{0,20}(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)',
+    r'\b(?:rrp|price|cost|unit\s*cost|rate)\b[^\d$]{0,20}(?P<num>\d+(?:,\d{3})*(?:\.\d+)?)',
     re.IGNORECASE,
 )
 
