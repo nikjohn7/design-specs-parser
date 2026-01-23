@@ -193,64 +193,49 @@ flowchart LR
 ### Proposed Production Deployment
 
 ```mermaid
-flowchart TB
-    subgraph Clients
-        Web[Web Application]
-        Mobile[Mobile App]
-    end
+flowchart LR
+  subgraph Clients
+    direction TB
+    ProgramaApp[Programa Platform]
+    DesignClients[Design Clients]
+  end
 
-    subgraph "Load Balancer"
-        LB[Application Load Balancer]
-    end
+  HTTPS[HTTPS Endpoint<br/>Auth · Rate Limit]
+  API[Parser API<br/>──────────<br/>GET /health<br/>POST /parse]
 
-    subgraph "Container Service"
-        API1[Parser API - Instance 1]
-        API2[Parser API - Instance 2]
-        API3[Parser API - Instance N]
-    end
+  ProgramaApp --> HTTPS
+  DesignClients --> HTTPS
+  HTTPS --> API
 
-    subgraph Storage
-        S3[Object Storage]
-    end
+  subgraph Optional["Optional: async mode for large files"]
 
-    subgraph "Async Processing"
-        Queue[Message Queue]
-        Worker[Background Workers]
-    end
+    direction TB
+    Store[(File Storage)]
+    Queue[Job Queue]
+    Workers[Workers]
+    Results[(Results Store)]
 
-    subgraph Monitoring
-        Logs[Log Aggregation]
-        Metrics[Metrics & Alerts]
-    end
+    Queue --> Workers
+    Workers --> Results
+  end
 
-    Web --> LB
-    Mobile --> LB
-    LB --> API1
-    LB --> API2
-    LB --> API3
-    API1 --> S3
-    API2 --> S3
-    API3 --> S3
-    API1 --> Queue
-    API2 --> Queue
-    API3 --> Queue
-    Queue --> Worker
-    Worker --> S3
-    API1 --> Logs
-    API2 --> Logs
-    API3 --> Logs
-    API1 --> Metrics
-    API2 --> Metrics
-    API3 --> Metrics
+  API -.-> Store
+  API -.-> Queue
+  API -.-> Results
+
+  Obs[Observability<br/>Logs · Metrics · Alerts]
+
+  API --> Obs
+  Workers -.-> Obs
 ```
 
 **Key production considerations:**
 
-- **Horizontal scaling**: Stateless API instances behind a load balancer
-- **Async processing**: Queue large files for background processing
-- **Object storage**: Store uploaded files and extracted images
-- **Health checks**: Docker HEALTHCHECK enables orchestrator monitoring
-- **Non-root user**: Container runs as unprivileged user for security
+- **Stateless API**: Horizontally scalable behind HTTPS endpoint with auth and rate limiting
+- **Sync-first design**: `POST /parse` returns results directly; suitable for most file sizes
+- **Optional async mode**: Large files can be queued for background processing (dashed paths)
+- **Observability**: Centralized logs, metrics, and alerts for API and workers
+- **Container-ready**: Docker HEALTHCHECK + non-root user for orchestrator compatibility
 
 ## Design Decisions
 
