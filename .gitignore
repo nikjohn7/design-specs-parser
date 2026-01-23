@@ -56,13 +56,11 @@ htmlcov/
 # Project-specific
 synthetic_out/
 extracted_images/
+project-files/
+scripts/
 
 # AI assistant / planning files (not for reviewers)
 .claude/
 PLAN.md
 tasks.md
 notes/
-
-# Keep for reviewers:
-# CLAUDE.md
-# AGENTS.md
