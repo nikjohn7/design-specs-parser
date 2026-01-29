@@ -33,7 +33,7 @@
 ---
 
 ### Task 1.2: Create ScheduleParserConfig Dataclass
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Create config dataclass for parser behavior in `app/parser/service.py`.
 
@@ -559,12 +559,12 @@ LLM_BATCH_SIZE=5
 
 | Phase | Tasks | Complete |
 |-------|-------|----------|
-| 1. Foundation | 7 | 1 |
+| 1. Foundation | 7 | 2 |
 | 2. LLM Abstraction | 6 | 0 |
 | 3. Extractor | 6 | 0 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **1** |
+| **Total** | **29** | **2** |
 
 ---
 
