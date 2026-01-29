@@ -52,7 +52,7 @@
 ---
 
 ### Task 1.3: Create ScheduleParser Class Skeleton
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Add `ScheduleParser` class to `app/parser/service.py` with method stubs.
 
@@ -74,7 +74,7 @@
 ---
 
 ### Task 1.4: Move Parsing Logic to ScheduleParser
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Move logic from `parse_workbook()` function in `workbook.py` into `ScheduleParser.parse_workbook()` method.
 
@@ -559,12 +559,12 @@ LLM_BATCH_SIZE=5
 
 | Phase | Tasks | Complete |
 |-------|-------|----------|
-| 1. Foundation | 7 | 2 |
+| 1. Foundation | 7 | 4 |
 | 2. LLM Abstraction | 6 | 0 |
 | 3. Extractor | 6 | 0 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **2** |
+| **Total** | **29** | **4** |
 
 ---
 
