@@ -62,5 +62,9 @@ scripts/
 # AI assistant / planning files (not for reviewers)
 .claude/
 PLAN.md
+CLAUDE.md
+CLAUDE*.md
+AGENTS.md
+AGENTS*.md
 tasks.md
 notes/
