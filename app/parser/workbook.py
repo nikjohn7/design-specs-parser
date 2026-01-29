@@ -620,12 +620,8 @@ def _dedupe_products_by_doc_code(products: list["Product"]) -> list["Product"]:
 def parse_workbook(wb: Workbook, filename: str, extract_images: bool = False) -> "ParseResponse":
     """Parse an openpyxl workbook into a structured API response.
 
-    Orchestrates the full parsing pipeline:
-      - determine schedule name
-      - iterate schedule-like sheets
-      - fill merged cells
-      - detect header row and map columns
-      - extract raw product rows and parse into Product models
+    This is a backward-compatible wrapper around ScheduleParser.
+    For new code, prefer using ScheduleParser directly with configuration.
 
     Args:
         wb: Loaded openpyxl workbook.
@@ -635,59 +631,8 @@ def parse_workbook(wb: Workbook, filename: str, extract_images: bool = False) ->
     Returns:
         ParseResponse with schedule_name and combined products from all schedule sheets.
     """
-    from app.core.models import ParseResponse
-    from app.parser.column_mapper import map_columns
-    from app.parser.field_parser import extract_product_fields, parse_kv_block
-    from app.parser.merged_cells import fill_merged_regions
-    from app.parser.row_extractor import iter_product_rows
-    from app.parser.sheet_detector import find_header_row
+    from app.parser.service import ScheduleParser, ScheduleParserConfig
 
-    schedule_name = get_schedule_name(wb, filename)
-    products: list["Product"] = []
-
-    schedule_supporting = {"item_location", "specs", "manufacturer", "notes", "qty", "cost", "product_name"}
-
-    for sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-
-        try:
-            fill_merged_regions(ws)
-        except Exception:
-            pass
-
-        header_row = find_header_row(ws)
-        if header_row is None:
-            continue
-
-        col_map = map_columns(ws, header_row=header_row)
-        if "doc_code" not in col_map and "product_name" not in col_map:
-            continue
-        if not (set(col_map.keys()) & schedule_supporting):
-            continue
-
-        for row_data in iter_product_rows(ws, header_row=header_row, col_map=col_map):
-            if _looks_like_repeated_header_row(row_data):
-                continue
-
-            kv_specs = parse_kv_block(row_data.get("specs"))
-            kv_manufacturer = parse_kv_block(row_data.get("manufacturer"))
-
-            product = extract_product_fields(row_data, kv_specs, kv_manufacturer)
-            if not any(
-                (
-                    product.doc_code,
-                    product.product_name,
-                    product.brand,
-                    product.colour,
-                    product.finish,
-                    product.material,
-                    product.product_description,
-                    product.product_details,
-                )
-            ):
-                continue
-
-            products.append(product)
-
-    products = _dedupe_products_by_doc_code(products)
-    return ParseResponse(schedule_name=schedule_name, products=products)
+    config = ScheduleParserConfig(extract_images=extract_images)
+    parser = ScheduleParser(config=config)
+    return parser.parse_workbook(wb, filename)

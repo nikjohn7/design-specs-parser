@@ -10,13 +10,24 @@ import logging
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.core.config import settings
 from app.core.models import ErrorResponse, ParseResponse
-from app.parser.workbook import WorkbookLoadError, load_workbook_safe, parse_workbook
+from app.parser.service import ScheduleParser, ScheduleParserConfig
+from app.parser.workbook import WorkbookLoadError, load_workbook_safe
 from app.parser.sheet_detector import get_schedule_sheets
 
 # Create router instance
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Create parser instance at startup using app settings.
+# LLM client will be wired in Phase 2 (currently uses default no-op behavior).
+_parser_config = ScheduleParserConfig(
+    use_llm=settings.use_llm,
+    llm_mode=settings.llm_mode,
+    llm_min_missing_fields=settings.llm_min_missing_fields,
+)
+schedule_parser = ScheduleParser(config=_parser_config)
 
 
 @router.get(
@@ -122,7 +133,7 @@ async def parse_schedule(
     try:
         wb = load_workbook_safe(file_bytes)
         schedule_sheets = get_schedule_sheets(wb)
-        parsed = parse_workbook(wb, filename=file.filename)
+        parsed = schedule_parser.parse_workbook(wb, filename=file.filename)
 
         logger.info(
             "Parsed workbook filename=%s sheets_total=%d schedule_sheets=%d products=%d",

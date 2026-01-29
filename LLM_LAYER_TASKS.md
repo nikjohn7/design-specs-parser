@@ -99,7 +99,7 @@
 ---
 
 ### Task 1.5: Create Backward-Compatible Wrapper
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Make old `parse_workbook()` function a thin wrapper around `ScheduleParser`.
 
@@ -116,7 +116,7 @@
 ---
 
 ### Task 1.6: Wire Routes to Use ScheduleParser
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Update `/parse` endpoint to use a configured `ScheduleParser` instance.
 
@@ -139,7 +139,7 @@
 ---
 
 ### Task 1.7: Verify Regression Tests Pass
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Run full test suite to ensure Phase 1 refactor didn't break anything.
 
@@ -559,12 +559,12 @@ LLM_BATCH_SIZE=5
 
 | Phase | Tasks | Complete |
 |-------|-------|----------|
-| 1. Foundation | 7 | 4 |
+| 1. Foundation | 7 | 7 |
 | 2. LLM Abstraction | 6 | 0 |
 | 3. Extractor | 6 | 0 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **4** |
+| **Total** | **29** | **7** |
 
 ---
 
