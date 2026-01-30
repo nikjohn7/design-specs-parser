@@ -154,7 +154,7 @@
 ## Phase 2: LLM Client Abstraction
 
 ### Task 2.1: Create LLMProductPatch Model
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Create Pydantic model for partial product updates from LLM.
 
@@ -173,7 +173,7 @@
 ---
 
 ### Task 2.2: Create BaseLLMClient ABC
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Define abstract base class for LLM clients.
 
@@ -560,11 +560,11 @@ LLM_BATCH_SIZE=5
 | Phase | Tasks | Complete |
 |-------|-------|----------|
 | 1. Foundation | 7 | 7 |
-| 2. LLM Abstraction | 6 | 0 |
+| 2. LLM Abstraction | 6 | 2 |
 | 3. Extractor | 6 | 0 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **7** |
+| **Total** | **29** | **9** |
 
 ---
 
