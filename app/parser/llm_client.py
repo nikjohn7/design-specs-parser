@@ -65,3 +65,59 @@ class BaseLLMClient(ABC):
         underlying provider supports it.
         """
         return [self.extract_product_patch(text, ctx) for text, ctx in items]
+
+
+class NoopLLMClient(BaseLLMClient):
+    """LLM client implementation that always returns an empty patch.
+
+    This is the default client used when LLM integration is disabled.
+    It allows the rest of the pipeline to depend on the LLM interface
+    without making any external calls or changing behavior.
+    """
+
+    def extract_product_patch(
+        self,
+        raw_text: str,
+        context: dict | None = None,
+    ) -> LLMProductPatch:
+        """Return an empty patch regardless of input."""
+        return LLMProductPatch()
+
+
+class FakeLLMClient(BaseLLMClient):
+    """Test LLM client that returns predictable, configurable patches.
+
+    The client is configured with a mapping from substring -> patch. On
+    each call, it records the request and returns the first patch whose
+    key is found as a substring in the input text. If no key matches,
+    an empty patch is returned.
+    """
+
+    def __init__(self, responses: dict[str, LLMProductPatch] | None = None) -> None:
+        # Simple substring-to-patch mapping used for deterministic tests.
+        self.responses: dict[str, LLMProductPatch] = responses or {}
+        # Record of calls made: (raw_text, context) tuples.
+        self.calls: list[tuple[str, dict | None]] = []
+
+    def extract_product_patch(
+        self,
+        raw_text: str,
+        context: dict | None = None,
+    ) -> LLMProductPatch:
+        """Return a configured patch and record the call.
+
+        Args:
+            raw_text: Free-form product description text.
+            context: Optional structured context, passed through for
+                observability but not used in matching.
+        """
+        # Track every call for assertions in tests.
+        self.calls.append((raw_text, context))
+
+        # Find the first configured key that appears in the input text.
+        for key, patch in self.responses.items():
+            if key in raw_text:
+                return patch
+
+        # No configured response matched; return an empty patch.
+        return LLMProductPatch()
