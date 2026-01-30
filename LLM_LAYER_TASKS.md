@@ -227,7 +227,7 @@
 ---
 
 ### Task 2.5: Create build_llm_client Factory
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Factory function to create appropriate LLM client from settings.
 
@@ -246,7 +246,7 @@
 ---
 
 ### Task 2.6: Write Unit Tests for LLM Clients
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Test NoopLLMClient and FakeLLMClient behavior.
 
@@ -560,11 +560,11 @@ LLM_BATCH_SIZE=5
 | Phase | Tasks | Complete |
 |-------|-------|----------|
 | 1. Foundation | 7 | 7 |
-| 2. LLM Abstraction | 6 | 4 |
+| 2. LLM Abstraction | 6 | 6 |
 | 3. Extractor | 6 | 0 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **11** |
+| **Total** | **29** | **13** |
 
 ---
 

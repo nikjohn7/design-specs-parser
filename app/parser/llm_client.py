@@ -121,3 +121,30 @@ class FakeLLMClient(BaseLLMClient):
 
         # No configured response matched; return an empty patch.
         return LLMProductPatch()
+
+
+def build_llm_client(settings) -> BaseLLMClient:
+    """Factory function to create appropriate LLM client from settings.
+
+    Args:
+        settings: Application settings object with use_llm, llm_provider,
+            and credential fields.
+
+    Returns:
+        A BaseLLMClient instance appropriate for the current configuration.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if not settings.use_llm:
+        return NoopLLMClient()
+
+    if settings.llm_provider == "deepinfra":
+        # DeepInfraLLMClient will be implemented in Task 4.1.
+        # For now, return NoopLLMClient as a placeholder.
+        logger.info("DeepInfra provider selected but not yet implemented; using NoopLLMClient")
+        return NoopLLMClient()
+
+    logger.warning(f"Unknown LLM provider: {settings.llm_provider}, using NoopLLMClient")
+    return NoopLLMClient()

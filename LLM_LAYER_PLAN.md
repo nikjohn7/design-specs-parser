@@ -887,16 +887,16 @@ pydantic-settings>=2.0.0
 ### Implementation
 - [x] Create `app/core/config.py` with Settings
 - [x] Create `app/parser/service.py` with ScheduleParser
-- [ ] Create `app/parser/llm_client.py` with all clients
+- [x] Create `app/parser/llm_client.py` with all clients
 - [ ] Create `app/parser/llm_extractor.py` with ProductExtractor
-- [ ] Refactor `workbook.py` to use ScheduleParser
-- [ ] Update `routes.py` to use configured parser
+- [x] Refactor `workbook.py` to use ScheduleParser
+- [x] Update `routes.py` to use configured parser
 - [ ] Add `.env.example` with LLM variables
 
 ### Testing
 - [x] All existing tests pass (regression)
-- [ ] Unit tests for NoopLLMClient
-- [ ] Unit tests for FakeLLMClient
+- [x] Unit tests for NoopLLMClient
+- [x] Unit tests for FakeLLMClient
 - [ ] Unit tests for ProductExtractor (fallback mode)
 - [ ] Unit tests for ProductExtractor (refine mode)
 - [ ] Integration test for DeepInfraLLMClient (optional)
