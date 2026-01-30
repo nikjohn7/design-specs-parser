@@ -191,7 +191,7 @@
 ---
 
 ### Task 2.3: Implement NoopLLMClient
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Default client that returns empty patches (LLM disabled).
 
@@ -208,7 +208,7 @@
 ---
 
 ### Task 2.4: Implement FakeLLMClient
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Test client that returns configurable responses and records calls.
 
@@ -560,11 +560,11 @@ LLM_BATCH_SIZE=5
 | Phase | Tasks | Complete |
 |-------|-------|----------|
 | 1. Foundation | 7 | 7 |
-| 2. LLM Abstraction | 6 | 2 |
+| 2. LLM Abstraction | 6 | 4 |
 | 3. Extractor | 6 | 0 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **9** |
+| **Total** | **29** | **11** |
 
 ---
 
