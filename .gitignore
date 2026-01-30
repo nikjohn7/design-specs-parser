@@ -58,6 +58,7 @@ synthetic_out/
 extracted_images/
 project-files/
 scripts/
+opencode.json
 
 # AI assistant / planning files (not for reviewers)
 .claude/
