@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from openpyxl import Workbook
 
 from app.core.models import ParseResponse, Product
+from app.parser.llm_client import BaseLLMClient, NoopLLMClient
+from app.parser.llm_extractor import ExtractionContext, ProductExtractor
 
 
 @dataclass
@@ -26,6 +28,7 @@ class ScheduleParserConfig:
     use_llm: bool = False
     llm_mode: Literal["fallback", "refine"] = "fallback"
     llm_min_missing_fields: int = 3
+    llm_batch_size: int = 5
     extract_images: bool = False
 
 
@@ -50,7 +53,7 @@ class ScheduleParser:
     def __init__(
         self,
         config: ScheduleParserConfig | None = None,
-        llm_client: object | None = None,  # BaseLLMClient once llm_client.py exists
+        llm_client: BaseLLMClient | None = None,
     ):
         """Initialize the parser service.
 
@@ -60,7 +63,15 @@ class ScheduleParser:
                        (no-op) if not provided or if use_llm is False.
         """
         self.config = config or ScheduleParserConfig()
-        self._llm_client = llm_client
+        self._llm_client = llm_client or NoopLLMClient()
+
+        # Create the product extractor for LLM-enhanced extraction
+        self._extractor = ProductExtractor(
+            llm_client=self._llm_client,
+            mode=self.config.llm_mode,
+            min_missing_fields=self.config.llm_min_missing_fields,
+            batch_size=self.config.llm_batch_size,
+        )
 
     def parse_workbook(self, wb: "Workbook", filename: str) -> ParseResponse:
         """Parse a workbook and return structured product data.
@@ -88,7 +99,9 @@ class ScheduleParser:
         from app.parser.workbook import get_schedule_name
 
         schedule_name = get_schedule_name(wb, filename)
-        products: list[Product] = []
+
+        # Collect products with their raw text and context for batch LLM extraction
+        extraction_items: list[tuple[Product, str, ExtractionContext | None]] = []
 
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
@@ -116,7 +129,10 @@ class ScheduleParser:
                 continue
 
             # Extract products from this sheet
+            row_index = header_row
             for row_data in iter_product_rows(ws, header_row=header_row, col_map=col_map):
+                row_index += 1
+
                 if self._looks_like_repeated_header_row(row_data):
                     continue
 
@@ -129,7 +145,21 @@ class ScheduleParser:
                 if not self._has_meaningful_data(product):
                     continue
 
-                products.append(product)
+                # Build raw text for LLM from row data
+                raw_text = self._build_raw_text(row_data)
+                context = ExtractionContext(
+                    sheet_name=sheet_name,
+                    row_index=row_index,
+                    section=product.product_description,
+                )
+
+                extraction_items.append((product, raw_text, context))
+
+        # Apply LLM extraction (batch) if enabled
+        if self.config.use_llm and extraction_items:
+            products = self._extractor.extract_batch(extraction_items)
+        else:
+            products = [item[0] for item in extraction_items]
 
         # De-duplicate by doc_code
         products = self._dedupe_products_by_doc_code(products)
@@ -148,6 +178,31 @@ class ScheduleParser:
             product.product_description,
             product.product_details,
         ))
+
+    def _build_raw_text(self, row_data: dict[str, Any]) -> str:
+        """Build raw text from row data for LLM analysis.
+
+        Concatenates relevant cell values into a single string that
+        the LLM can use to extract product information.
+        """
+        # Columns that contain useful text for LLM extraction
+        text_columns = [
+            "item_location",
+            "specs",
+            "manufacturer",
+            "notes",
+            "product_name",
+        ]
+
+        parts = []
+        for col in text_columns:
+            value = row_data.get(col)
+            if value is not None:
+                text = str(value).strip()
+                if text:
+                    parts.append(text)
+
+        return " | ".join(parts)
 
     def _looks_like_repeated_header_row(self, row_data: dict[str, Any]) -> bool:
         """Detect header rows repeated mid-sheet (e.g., after page breaks)."""

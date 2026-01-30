@@ -888,7 +888,7 @@ pydantic-settings>=2.0.0
 - [x] Create `app/core/config.py` with Settings
 - [x] Create `app/parser/service.py` with ScheduleParser
 - [x] Create `app/parser/llm_client.py` with all clients
-- [ ] Create `app/parser/llm_extractor.py` with ProductExtractor
+- [x] Create `app/parser/llm_extractor.py` with ProductExtractor
 - [x] Refactor `workbook.py` to use ScheduleParser
 - [x] Update `routes.py` to use configured parser
 - [ ] Add `.env.example` with LLM variables

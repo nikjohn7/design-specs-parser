@@ -267,7 +267,7 @@
 ## Phase 3: Product Extractor Layer
 
 ### Task 3.1: Create ExtractionContext Dataclass
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Metadata structure passed to LLM for context.
 
@@ -283,7 +283,7 @@
 ---
 
 ### Task 3.2: Implement ProductExtractor (Fallback Mode)
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Class that orchestrates heuristic + LLM extraction with fallback strategy.
 
@@ -305,7 +305,7 @@
 ---
 
 ### Task 3.3: Add Batch Extraction to ProductExtractor
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Method to process multiple products efficiently.
 
@@ -324,7 +324,7 @@
 ---
 
 ### Task 3.4: Write Unit Tests for ProductExtractor
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Test extraction logic using FakeLLMClient.
 
@@ -343,7 +343,7 @@
 ---
 
 ### Task 3.5: Integrate Extractor into ScheduleParser
-- [ ] **Status: Pending**
+- [x] **Status: Complete**
 
 **What:** Wire ProductExtractor into the parsing pipeline.
 
@@ -561,10 +561,10 @@ LLM_BATCH_SIZE=5
 |-------|-------|----------|
 | 1. Foundation | 7 | 7 |
 | 2. LLM Abstraction | 6 | 6 |
-| 3. Extractor | 6 | 0 |
+| 3. Extractor | 6 | 5 |
 | 4. DeepInfra | 5 | 0 |
 | 5. Documentation | 5 | 0 |
-| **Total** | **29** | **13** |
+| **Total** | **29** | **18** |
 
 ---
 
